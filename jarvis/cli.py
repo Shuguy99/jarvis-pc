@@ -6,6 +6,7 @@ import argparse
 import logging
 import os
 import sys
+from pathlib import Path
 
 from .assistant import Assistant, Event, State
 from .config import Config, load_config
@@ -38,24 +39,35 @@ def _print_event(event: Event) -> None:
         print(f"J.A.R.V.I.S.: {event.text}")
 
 
-def run_text(config: Config) -> int:
-    """Текстовый режим: команды вводятся с клавиатуры."""
-    assistant = Assistant(config, _print_event)
-    assistant.monitor.start()
+EXIT_WORDS = {"выход", "exit", "quit", "стоп"}
+
+
+def _prompt_loop(assistant: Assistant) -> None:
+    """Читает команды с клавиатуры, пока пользователь не завершит диалог."""
     print(BANNER)
     print(f"Мозг: {type(assistant.brain).__name__}, навыков: {len(assistant.skills)}")
     print("Введите команду или «выход».\n")
-    try:
-        while True:
-            try:
-                line = input("Вы: ").strip()
-            except (EOFError, KeyboardInterrupt):
-                break
-            if line.lower() in {"выход", "exit", "quit", "стоп"}:
-                break
-            if not line:
-                continue
+    assistant.monitor.start()
+    while True:
+        try:
+            line = input("Вы: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            return
+        if line.lower() in EXIT_WORDS:
+            return
+        if line:
             assistant.handle_text(line)
+
+
+def run_text(config: Config) -> int:
+    """Текстовый режим: команды вводятся с клавиатуры, HUD — если включён."""
+    if config.ui.enabled:
+        from .ui import run_hud
+
+        return run_hud(config, _prompt_loop)
+    assistant = Assistant(config, _print_event)
+    try:
+        _prompt_loop(assistant)
     finally:
         assistant.shutdown()
     return 0
@@ -174,7 +186,14 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     """Запускает выбранный режим работы."""
     args = build_parser().parse_args(argv)
-    config = load_config(args.config)
+    if args.config and not Path(args.config).is_file():
+        print(f"Файл конфига не найден: {args.config}", file=sys.stderr)
+        return 2
+    try:
+        config = load_config(args.config)
+    except ValueError as exc:
+        print(f"Ошибка в конфиге: {exc}", file=sys.stderr)
+        return 2
     _setup_logging(args.log_level or config.log_level)
     mode = args.mode or "voice"
     if mode == "text":

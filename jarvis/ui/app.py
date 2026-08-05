@@ -1,11 +1,15 @@
-"""Запуск HUD вместе с голосовым циклом ассистента в отдельном потоке."""
+"""Запуск HUD вместе с рабочим циклом ассистента в отдельном потоке."""
 
 from __future__ import annotations
 
 import logging
+import os
+import signal
 import sys
 import threading
+from collections.abc import Callable
 
+from PySide6.QtCore import QMetaObject, Qt, QTimer
 from PySide6.QtWidgets import QApplication
 
 from ..assistant import Assistant, Event
@@ -14,9 +18,16 @@ from .hud import HudWindow
 
 log = logging.getLogger(__name__)
 
+Driver = Callable[[Assistant], None]
 
-def run_hud(config: Config) -> int:
-    """Показывает оверлей и слушает микрофон до закрытия окна."""
+
+def _voice_driver(assistant: Assistant) -> None:
+    """Обычный режим HUD: слушать микрофон до закрытия окна."""
+    assistant.listen_forever()
+
+
+def run_hud(config: Config, driver: Driver = _voice_driver) -> int:
+    """Показывает оверлей и крутит рабочий цикл ассистента до закрытия окна."""
     app = QApplication.instance() or QApplication(sys.argv)
     window_holder: dict[str, HudWindow] = {}
 
@@ -26,19 +37,36 @@ def run_hud(config: Config) -> int:
             window.submit(event)
 
     assistant = Assistant(config, sink)
-    window = HudWindow(config.ui, assistant.shutdown)
+
+    def close() -> None:
+        assistant.shutdown()
+        # Завершать цикл событий нужно в его же потоке: close() зовётся и из рабочего.
+        QMetaObject.invokeMethod(app, "quit", Qt.ConnectionType.QueuedConnection)
+
+    window = HudWindow(config.ui, close)
     window_holder["window"] = window
     window.show()
 
-    def voice_loop() -> None:
-        try:
-            assistant.listen_forever()
-        except Exception:
-            log.exception("Голосовой цикл остановлен из-за ошибки")
+    # Ctrl+C в консоли должен закрывать оверлей, а не бросать исключение в таймер.
+    signal.signal(signal.SIGINT, lambda *_: close())
+    # Пустой таймер: без него Qt не отдаёт управление интерпретатору для сигналов.
+    heartbeat = QTimer()
+    heartbeat.start(200)
+    heartbeat.timeout.connect(lambda: None)
 
-    thread = threading.Thread(target=voice_loop, name="jarvis-voice", daemon=True)
+    def work() -> None:
+        try:
+            driver(assistant)
+        except Exception:
+            log.exception("Рабочий цикл остановлен из-за ошибки")
+        finally:
+            close()
+
+    thread = threading.Thread(target=work, name="jarvis-worker", daemon=True)
     thread.start()
-    try:
-        return app.exec()
-    finally:
-        assistant.shutdown()
+    code = app.exec()
+    assistant.shutdown()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    # Рабочий поток может висеть на чтении ввода; обычное завершение упёрлось бы в его блокировки.
+    os._exit(code)

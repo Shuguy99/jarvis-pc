@@ -54,6 +54,16 @@ RULES: tuple[Rule, ...] = (
         lambda m: {},
     ),
     Rule(
+        re.compile(r"(покажи|что у тебя в) памяти?|что ты помнишь$"),
+        "list_memory",
+        lambda m: {},
+    ),
+    Rule(
+        re.compile(r"забудь[,:]? (?:про |что )?(?P<query>.+)"),
+        "forget_fact",
+        lambda m: {"query": m.group("query").strip()},
+    ),
+    Rule(
         re.compile(r"запомни[,:]? (?:что )?(?P<text>.+)"),
         "remember_fact",
         lambda m: {"text": m.group("text").strip()},
@@ -89,6 +99,13 @@ RULES: tuple[Rule, ...] = (
         "open_url",
         lambda m: {"url": m.group("url")},
     ),
+    Rule(
+        re.compile(r"(?:открой|зайди на) (?:в браузере )?(?P<url>[\w-]+\.[\w./?=&-]+)"),
+        "browser_open",
+        lambda m: {"url": m.group("url")},
+    ),
+    Rule(re.compile(r"(прочитай|что на) странице?ы?"), "browser_read", lambda m: {}),
+    Rule(re.compile(r"закрой браузер"), "browser_close", lambda m: {}),
     Rule(
         re.compile(r"(открой|запусти) (?P<app>.+)"),
         "open_app",

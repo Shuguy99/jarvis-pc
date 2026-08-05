@@ -54,7 +54,9 @@ class JsonMemory:
         try:
             data = json.loads(self._path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
-            log.warning("Файл памяти повреждён, начинаю заново: %s", self._path)
+            backup = self._path.with_suffix(".broken.json")
+            self._path.replace(backup)
+            log.warning("Файл памяти повреждён, копия сохранена: %s", backup)
             return []
         return data if isinstance(data, list) else []
 
