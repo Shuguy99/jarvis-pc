@@ -102,6 +102,75 @@ class UiConfig:
 
 
 @dataclass
+class MonitorConfig:
+    """Проактивный мониторинг состояния компьютера."""
+
+    enabled: bool = True
+    interval_s: float = 60.0
+    # Ассистент сообщает о проблеме не чаще, чем раз в этот период.
+    repeat_after_s: float = 900.0
+    battery_low: int = 20
+    battery_critical: int = 10
+    memory_high: int = 90
+    disk_high: int = 92
+    cpu_high: int = 95
+    # Сколько подряд замеров CPU должны превысить порог, чтобы это был не всплеск.
+    cpu_samples: int = 3
+
+
+@dataclass
+class VisionConfig:
+    """«Зрение»: OCR и анализ экрана мультимодальной моделью."""
+
+    enabled: bool = True
+    # auto повторяет brain.backend; иначе ollama | openai
+    backend: str = "auto"
+    ollama_model: str = "llava:7b"
+    openai_model: str = "gpt-4o-mini"
+    # Языки Tesseract, например "rus+eng".
+    ocr_languages: str = "rus+eng"
+    # Путь к tesseract.exe, если он не в PATH.
+    tesseract_cmd: str = ""
+    max_side_px: int = 1600
+
+
+@dataclass
+class MemoryConfig:
+    """Долговременная память с семантическим поиском."""
+
+    enabled: bool = True
+    # auto: ChromaDB, если установлена, иначе локальный JSON-индекс.
+    backend: str = "auto"
+    path: str = str(Path.home() / ".jarvis" / "memory")
+    top_k: int = 3
+
+
+@dataclass
+class BrowserConfig:
+    """Автоматизация браузера через Playwright."""
+
+    enabled: bool = True
+    engine: str = "chromium"
+    headless: bool = False
+    # Профиль сохраняется, поэтому логины переживают перезапуск.
+    user_data_dir: str = str(Path.home() / ".jarvis" / "browser")
+    timeout_ms: int = 15000
+    max_text_chars: int = 2000
+
+
+@dataclass
+class SpotifyConfig:
+    """Управление Spotify через Web API (spotipy)."""
+
+    enabled: bool = False
+    # Ключи берём из окружения: SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET.
+    redirect_uri: str = "http://127.0.0.1:8888/callback"
+    cache_path: str = str(Path.home() / ".jarvis" / "spotify.json")
+    # Запускать приложение Spotify, если нет активного устройства.
+    launch_app: bool = True
+
+
+@dataclass
 class SkillsConfig:
     """Настройки навыков."""
 
@@ -110,6 +179,10 @@ class SkillsConfig:
     notes_file: str = str(Path.home() / ".jarvis" / "notes.md")
     search_engine: str = "https://duckduckgo.com/?q={query}"
     apps: dict[str, str] = field(default_factory=dict)
+    vision: VisionConfig = field(default_factory=VisionConfig)
+    memory: MemoryConfig = field(default_factory=MemoryConfig)
+    browser: BrowserConfig = field(default_factory=BrowserConfig)
+    spotify: SpotifyConfig = field(default_factory=SpotifyConfig)
 
 
 @dataclass
@@ -125,6 +198,7 @@ class Config:
     mic: MicConfig = field(default_factory=MicConfig)
     brain: BrainConfig = field(default_factory=BrainConfig)
     ui: UiConfig = field(default_factory=UiConfig)
+    monitor: MonitorConfig = field(default_factory=MonitorConfig)
     skills: SkillsConfig = field(default_factory=SkillsConfig)
 
     @property

@@ -43,6 +43,31 @@ RULES: tuple[Rule, ...] = (
         lambda m: {},
     ),
     Rule(re.compile(r"(сделай |сними )?скриншот|снимок экрана"), "take_screenshot", lambda m: {}),
+    Rule(
+        re.compile(r"(прочитай|считай|распознай) (весь )?текст|что (здесь |там )?написано"),
+        "read_screen_text",
+        lambda m: {},
+    ),
+    Rule(
+        re.compile(r"(проанализируй|посмотри на|что на) (это |моё )?(экране?|окно|окне)"),
+        "analyze_screen",
+        lambda m: {},
+    ),
+    Rule(
+        re.compile(r"запомни[,:]? (?:что )?(?P<text>.+)"),
+        "remember_fact",
+        lambda m: {"text": m.group("text").strip()},
+    ),
+    Rule(
+        re.compile(r"(?:вспомни|продиктуй|что ты помнишь про)[,:]? (?P<query>.+)"),
+        "recall_fact",
+        lambda m: {"query": m.group("query").strip()},
+    ),
+    Rule(
+        re.compile(r"(?:включи|поставь) (?:в )?(?:спотифай|spotify)[ ,:]+(?P<query>.+)"),
+        "spotify_play",
+        lambda m: {"query": m.group("query").strip()},
+    ),
     Rule(re.compile(r"заблокируй (компьютер|пк|экран)"), "lock_workstation", lambda m: {}),
     Rule(
         re.compile(r"(поставь|установи) громкость (на )?(?P<level>\d+)"),

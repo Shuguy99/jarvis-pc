@@ -11,21 +11,24 @@ if errorlevel 1 (
 )
 
 if not exist ".venv" (
-    echo [1/4] Создаю виртуальное окружение...
+    echo [1/5] Создаю виртуальное окружение...
     py -3 -m venv .venv || goto :error
 )
 
-echo [2/4] Обновляю pip...
+echo [2/5] Обновляю pip...
 ".venv\Scripts\python.exe" -m pip install --upgrade pip || goto :error
 
-echo [3/4] Ставлю зависимости (это займёт несколько минут)...
+echo [3/5] Ставлю зависимости (это займёт несколько минут)...
 ".venv\Scripts\python.exe" -m pip install -r requirements.txt || goto :error
 
+echo [4/5] Ставлю браузер для автоматизации...
+".venv\Scripts\python.exe" -m playwright install chromium || echo Браузер поставить не удалось, навыки browser_* будут недоступны.
+
 if not exist "config.yaml" (
-    echo [4/4] Создаю config.yaml из шаблона...
+    echo [5/5] Создаю config.yaml из шаблона...
     copy /y config.example.yaml config.yaml >nul
 ) else (
-    echo [4/4] config.yaml уже есть, оставляю как есть.
+    echo [5/5] config.yaml уже есть, оставляю как есть.
 )
 
 echo.

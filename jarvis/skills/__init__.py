@@ -3,23 +3,51 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 
-from ..config import SkillsConfig
-from . import apps, personal, system, web
+from ..config import Config
+from . import apps, browser, memory, personal, spotify, system, vision, web
+from .browser import BrowserSession
+from .memory import Memory
 from .personal import TimerService
 from .registry import Skill, SkillRegistry
 
-__all__ = ["Skill", "SkillRegistry", "TimerService", "build_registry"]
+__all__ = [
+    "Services",
+    "Skill",
+    "SkillRegistry",
+    "TimerService",
+    "build_registry",
+]
 
 
-def build_registry(
-    config: SkillsConfig, notify: Callable[[str], None]
-) -> tuple[SkillRegistry, TimerService]:
-    """Создаёт реестр всех навыков и сервис таймеров."""
+@dataclass
+class Services:
+    """Долгоживущие службы, которыми владеют навыки."""
+
+    timers: TimerService
+    memory: Memory
+    browser: BrowserSession
+
+    def shutdown(self) -> None:
+        """Освобождает ресурсы всех служб."""
+        self.timers.shutdown()
+        self.browser.shutdown()
+
+
+def build_registry(config: Config, notify: Callable[[str], None]) -> tuple[SkillRegistry, Services]:
+    """Создаёт реестр всех навыков и связанные с ними службы."""
+    skills_config = config.skills
     timers = TimerService(notify)
+    memory_skills, memory_store = memory.build_skills(skills_config.memory)
+    browser_skills, browser_session = browser.build_skills(skills_config.browser)
     registry = SkillRegistry()
-    registry.extend(system.build_skills(config))
-    registry.extend(apps.build_skills(config))
-    registry.extend(web.build_skills(config))
-    registry.extend(personal.build_skills(config, timers))
-    return registry, timers
+    registry.extend(system.build_skills(skills_config))
+    registry.extend(apps.build_skills(skills_config))
+    registry.extend(web.build_skills(skills_config))
+    registry.extend(personal.build_skills(skills_config, timers))
+    registry.extend(vision.build_skills(config))
+    registry.extend(memory_skills)
+    registry.extend(browser_skills)
+    registry.extend(spotify.build_skills(skills_config))
+    return registry, Services(timers, memory_store, browser_session)
