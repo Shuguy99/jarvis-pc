@@ -30,6 +30,14 @@ from jarvis.skills.registry import Skill, SkillRegistry, object_schema
         ("запомни, что мой номер паспорта 1234", "remember_fact"),
         ("вспомни мой номер паспорта", "recall_fact"),
         ("включи в spotify deep purple smoke on the water", "spotify_play"),
+        ("покажи память", "list_memory"),
+        ("забудь про номер заказа", "forget_fact"),
+        ("зайди на wildberries.ru", "browser_open"),
+        ("прочитай страницу", "browser_read"),
+        ("закрой браузер", "browser_close"),
+        ("открой сайт example.com", "open_url"),
+        ("открой блокнот", "open_app"),
+        ("закрой блокнот", "close_app"),
     ],
 )
 def test_rules_match_expected_skill(phrase: str, skill: str) -> None:

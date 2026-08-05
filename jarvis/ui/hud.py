@@ -117,6 +117,7 @@ class HudWindow(QWidget):
             | Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setWindowOpacity(config.opacity)
         self.resize(config.width, config.height)
 
@@ -197,6 +198,13 @@ class HudWindow(QWidget):
         origin = getattr(self, "_drag_origin", None)
         if origin is not None:
             self.move(event.globalPosition().toPoint() - origin)  # type: ignore[attr-defined]
+
+    def showEvent(self, event: object) -> None:  # noqa: N802 - Qt API
+        """Поднимает окно и берёт фокус, чтобы Escape срабатывал сразу."""
+        super().showEvent(event)  # type: ignore[arg-type]
+        self.raise_()
+        self.activateWindow()
+        self.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
 
     def keyPressEvent(self, event: object) -> None:  # noqa: N802 - Qt API
         """Escape закрывает оверлей."""
