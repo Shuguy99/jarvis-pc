@@ -1,0 +1,57 @@
+# Конфигурация Джарвиса. Скопируйте в config.yaml и правьте под себя.
+log_level: INFO
+greeting: "Все системы в норме, сэр."
+
+wake_word:
+  enabled: true
+  model: hey_jarvis        # предобученная модель openWakeWord
+  threshold: 0.5
+  fallback_phrases: ["джарвис", "jarvis"]
+
+stt:
+  model: small             # tiny | base | small | medium | large-v3
+  language: ru
+  device: auto             # auto | cpu | cuda
+  compute_type: int8       # int8 для CPU, float16 для GPU
+  beam_size: 1
+
+tts:
+  engine: sapi5            # sapi5 (офлайн, Windows) | edge (neural, нужен интернет)
+  voice: ""                # часть имени голоса SAPI, например "Irina"
+  edge_voice: ru-RU-DmitryNeural
+  rate: 190
+  volume: 1.0
+
+mic:
+  device: null             # индекс устройства из `python -m jarvis devices`
+  sample_rate: 16000
+  frame_ms: 30
+  vad_aggressiveness: 2
+  silence_ms: 800
+  max_utterance_s: 15.0
+  preroll_ms: 300
+
+brain:
+  backend: ollama          # ollama | openai | offline
+  openai_model: gpt-4o-mini
+  openai_base_url: ""      # для совместимых API (OpenRouter и т.п.)
+  ollama_model: qwen2.5:7b-instruct
+  ollama_host: http://127.0.0.1:11434
+  temperature: 0.4
+  max_history: 20
+  max_tool_iterations: 5
+
+ui:
+  enabled: true
+  opacity: 0.85
+  accent: "#3fd0ff"
+  corner: bottom-right     # top-left | top-right | bottom-left | bottom-right
+  width: 380
+  height: 220
+
+skills:
+  allow_shutdown: false    # true разрешает голосовое выключение ПК
+  search_engine: "https://duckduckgo.com/?q={query}"
+  apps:                    # свои приложения: "фраза": "путь или команда"
+    музыка: "C:\\Users\\Public\\Desktop\\Spotify.lnk"
+    работа: "C:\\Program Files\\Microsoft VS Code\\Code.exe"

@@ -1,0 +1,31 @@
+# Ядро: нужно всегда
+numpy==2.5.1
+PyYAML==6.0.3
+requests==2.34.2
+
+# Аудио: захват микрофона, детектор речи, распознавание
+sounddevice==0.5.5
+webrtcvad==2.0.10
+faster-whisper==1.2.1
+openwakeword==0.6.0
+
+# Синтез речи
+pyttsx3==2.99
+edge-tts==7.2.8
+playsound3==3.3.2
+
+# Интерфейс
+PySide6==6.11.1
+
+# Навыки
+psutil==7.2.2
+mss==10.2.0
+pyperclip==1.11.0
+
+# Облачный мозг (не нужен при backend: ollama)
+openai==2.51.0
+
+# Только Windows: окна и точное управление громкостью
+pygetwindow==0.0.9; sys_platform == "win32"
+pycaw==20251023; sys_platform == "win32"
+comtypes==1.4.16; sys_platform == "win32"

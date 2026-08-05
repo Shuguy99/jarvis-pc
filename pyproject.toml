@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jarvis-assistant"
+version = "0.1.0"
+description = "Голосовой ассистент Джарвис для ПК"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "PyYAML",
+    "requests",
+]
+
+[project.scripts]
+jarvis = "jarvis.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["jarvis*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+ignore = ["B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = false
