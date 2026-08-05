@@ -13,7 +13,8 @@ import numpy as np
 from .audio import Microphone, Speaker, SpeechRecorder, SpeechToText, WakeWordDetector
 from .brain import Brain, build_brain
 from .config import Config
-from .skills import SkillRegistry, TimerService, build_registry
+from .monitor import SystemMonitor
+from .skills import Services, SkillRegistry, build_registry
 
 log = logging.getLogger(__name__)
 
@@ -47,14 +48,16 @@ class Assistant:
         self._sink = sink or (lambda event: None)
         self.speaker = Speaker(config.tts)
         self.skills: SkillRegistry
-        self.timers: TimerService
-        self.skills, self.timers = build_registry(config.skills, self._announce)
+        self.services: Services
+        self.skills, self.services = build_registry(config, self._announce)
+        self.monitor = SystemMonitor(config.monitor, self._announce)
         self.brain: Brain = build_brain(config, self.skills)
         self.stt = SpeechToText(config.stt)
         self.wake_word = WakeWordDetector(config.wake_word)
         self.recorder = SpeechRecorder(config.mic)
         self._stop = threading.Event()
-        self._busy = threading.Lock()
+        # RLock: навык может заговорить прямо во время обработки команды.
+        self._busy = threading.RLock()
         log.info(
             "Мозг: %s, навыков: %d, акустическое пробуждение: %s",
             type(self.brain).__name__,
@@ -70,10 +73,12 @@ class Assistant:
             log.exception("Ошибка обработчика событий интерфейса")
 
     def _announce(self, text: str) -> None:
-        """Инициативное сообщение ассистента (например, срабатывание таймера)."""
-        self._emit(State.SPEAKING, text, "jarvis")
-        self.speaker.say(text)
-        self._emit(State.IDLE)
+        """Инициативное сообщение ассистента (таймер, предупреждение мониторинга)."""
+        # Не перебиваем диалог: ждём, пока текущая реплика договорит.
+        with self._busy:
+            self._emit(State.SPEAKING, text, "jarvis")
+            self.speaker.say(text)
+            self._emit(State.IDLE)
 
     def handle_text(self, text: str) -> str:
         """Обрабатывает текстовую команду и возвращает ответ."""
@@ -95,7 +100,8 @@ class Assistant:
     def shutdown(self) -> None:
         """Освобождает ресурсы ассистента."""
         self.stop()
-        self.timers.shutdown()
+        self.monitor.shutdown()
+        self.services.shutdown()
 
     def _handle_utterance(self, audio: np.ndarray, require_wake_word: bool) -> None:
         """Распознаёт реплику и выполняет команду."""
@@ -118,6 +124,7 @@ class Assistant:
     def listen_forever(self) -> None:
         """Основной голосовой цикл: пробуждение, запись, ответ."""
         preroll_frames = max(1, self.config.mic.preroll_ms // self.config.mic.frame_ms)
+        self.monitor.start()
         with Microphone(self.config.mic) as mic:
             self._announce(self.config.greeting)
             acoustic = self.wake_word.available and self.config.wake_word.enabled

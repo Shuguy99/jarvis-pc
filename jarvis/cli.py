@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 
 from .assistant import Assistant, Event, State
@@ -40,6 +41,7 @@ def _print_event(event: Event) -> None:
 def run_text(config: Config) -> int:
     """Текстовый режим: команды вводятся с клавиатуры."""
     assistant = Assistant(config, _print_event)
+    assistant.monitor.start()
     print(BANNER)
     print(f"Мозг: {type(assistant.brain).__name__}, навыков: {len(assistant.skills)}")
     print("Введите команду или «выход».\n")
@@ -114,6 +116,11 @@ def doctor(config: Config) -> int:
         ("pyperclip", "буфер обмена"),
         ("pygetwindow", "управление окнами"),
         ("pycaw", "точная громкость Windows"),
+        ("PIL", "подготовка снимков для анализа"),
+        ("pytesseract", "чтение текста с экрана (OCR)"),
+        ("chromadb", "долговременная память"),
+        ("playwright", "автоматизация браузера"),
+        ("spotipy", "управление Spotify"),
     ):
         try:
             __import__(module)
@@ -131,14 +138,19 @@ def doctor(config: Config) -> int:
         from .brain.ollama_brain import OllamaBrain
         from .skills import build_registry
 
-        skills, timers = build_registry(config.skills, lambda text: None)
+        skills, services = build_registry(config, lambda text: None)
         try:
             OllamaBrain(config.brain, skills).check()
             print("Ollama: доступна")
         except RuntimeError as exc:
             print(f"Ollama: {exc}")
         finally:
-            timers.shutdown()
+            services.shutdown()
+    if config.skills.spotify.enabled:
+        has_keys = bool(
+            os.environ.get("SPOTIFY_CLIENT_ID") and os.environ.get("SPOTIFY_CLIENT_SECRET")
+        )
+        print("Spotify: ключи", "заданы" if has_keys else "отсутствуют")
     return 0
 
 

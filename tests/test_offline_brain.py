@@ -25,6 +25,11 @@ from jarvis.skills.registry import Skill, SkillRegistry, object_schema
         ("запиши заметку: купить репульсоры", "add_note"),
         ("статус системы", "system_status"),
         ("что такое палладий", "fetch_summary"),
+        ("проанализируй это окно", "analyze_screen"),
+        ("что здесь написано", "read_screen_text"),
+        ("запомни, что мой номер паспорта 1234", "remember_fact"),
+        ("вспомни мой номер паспорта", "recall_fact"),
+        ("включи в spotify deep purple smoke on the water", "spotify_play"),
     ],
 )
 def test_rules_match_expected_skill(phrase: str, skill: str) -> None:
@@ -32,6 +37,22 @@ def test_rules_match_expected_skill(phrase: str, skill: str) -> None:
     matched = match_rule(phrase)
     assert matched is not None
     assert matched[0] == skill
+
+
+def test_remember_extracts_fact_without_prefix() -> None:
+    """Из фразы с «запомни» в память попадает только сам факт."""
+    assert match_rule("запомни, что мой любимый чай — сенча") == (
+        "remember_fact",
+        {"text": "мой любимый чай — сенча"},
+    )
+
+
+def test_spotify_query_extracted() -> None:
+    """Из фразы для Spotify выделяется только поисковый запрос."""
+    assert match_rule("включи в спотифай кино — электричка") == (
+        "spotify_play",
+        {"query": "кино — электричка"},
+    )
 
 
 def test_volume_level_extracted() -> None:

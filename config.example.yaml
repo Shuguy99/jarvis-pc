@@ -49,9 +49,46 @@ ui:
   width: 380
   height: 220
 
+monitor:                   # Джарвис сам предупреждает о проблемах с ПК
+  enabled: true
+  interval_s: 60
+  repeat_after_s: 900     # не повторять одно предупреждение чаще, чем раз в 15 минут
+  battery_low: 20
+  battery_critical: 10
+  memory_high: 90
+  disk_high: 92
+  cpu_high: 95
+  cpu_samples: 3          # столько замеров подряд, чтобы не реагировать на всплеск
+
 skills:
   allow_shutdown: false    # true разрешает голосовое выключение ПК
   search_engine: "https://duckduckgo.com/?q={query}"
   apps:                    # свои приложения: "фраза": "путь или команда"
     музыка: "C:\\Users\\Public\\Desktop\\Spotify.lnk"
     работа: "C:\\Program Files\\Microsoft VS Code\\Code.exe"
+
+  vision:                  # «зрение»: анализ экрана и OCR
+    enabled: true
+    backend: auto          # auto (как brain.backend) | ollama | openai
+    ollama_model: llava:7b # ollama pull llava:7b
+    openai_model: gpt-4o-mini
+    ocr_languages: rus+eng
+    tesseract_cmd: ""      # напр. C:\\Program Files\\Tesseract-OCR\\tesseract.exe
+    max_side_px: 1600
+
+  memory:                  # долговременная память (запомни / вспомни)
+    enabled: true
+    backend: auto          # auto | chroma | json
+    top_k: 3
+
+  browser:                 # автоматизация браузера через Playwright
+    enabled: true
+    engine: chromium       # chromium | firefox | webkit
+    headless: false
+    timeout_ms: 15000
+    max_text_chars: 2000
+
+  spotify:                 # включить конкретный трек по названию
+    enabled: false         # true + SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET в окружении
+    redirect_uri: "http://127.0.0.1:8888/callback"
+    launch_app: true
