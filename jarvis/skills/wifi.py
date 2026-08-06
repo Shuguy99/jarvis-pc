@@ -84,18 +84,20 @@ def wifi_status() -> str:
 def wifi_connect(ssid: str, password: str = "") -> str:
     """Подключается к Wi-Fi сети."""
     if IS_LINUX:
+        if not shutil.which("nmcli"):
+            return "nmcli не найден. Установите NetworkManager, сэр."
+        cmd = ["nmcli", "device", "wifi", "connect", ssid]
         if password:
-            cmd = f"nmcli device wifi connect {ssid} password {password}"
-        else:
-            cmd = f"nmcli device wifi connect {ssid}"
-        output = _nmcli(cmd)
-        if "Ошибка" in output:
-            return output
-        return f"Подключён к {ssid}, сэр."
+            cmd.extend(["password", password])
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=15)
+            output = result.stdout.strip() or result.stderr.strip()
+            if result.returncode != 0:
+                return f"Ошибка подключения: {output[:100]}, сэр."
+            return f"Подключён к {ssid}, сэр."
+        except Exception as exc:
+            return f"Ошибка: {exc}, сэр."
     if IS_WINDOWS:
-        if password:
-            profile = f'netsh wlan add profile filename="{ssid}.xml"'
-            return f"На Windows подключение через CLI ограничено. Используйте настройки, сэр."
         try:
             subprocess.run(
                 ["netsh", "wlan", "connect", f"name={ssid}"],
@@ -107,13 +109,39 @@ def wifi_connect(ssid: str, password: str = "") -> str:
     return "Wi-Fi управление доступно только на Linux и Windows, сэр."
 
 
+def _get_wifi_device() -> str:
+    """Определяет имя Wi-Fi интерфейса через nmcli."""
+    try:
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "DEVICE,TYPE", "device", "status"],
+            capture_output=True, text=True, check=False, timeout=5,
+        )
+        for line in result.stdout.strip().split("\n"):
+            parts = line.split(":")
+            if len(parts) >= 2 and parts[1].strip().lower() == "wifi":
+                return parts[0].strip()
+    except Exception:
+        pass
+    return "wlan0"
+
+
 def wifi_disconnect() -> str:
     """Отключает текущее Wi-Fi подключение."""
     if IS_LINUX:
-        output = _nmcli("nmcli device disconnect wlan0")
-        if "Ошибка" in output:
-            return output
-        return "Wi-Fi отключён, сэр."
+        if not shutil.which("nmcli"):
+            return "nmcli не найден. Установите NetworkManager, сэр."
+        device = _get_wifi_device()
+        try:
+            result = subprocess.run(
+                ["nmcli", "device", "disconnect", device],
+                capture_output=True, text=True, check=False, timeout=10,
+            )
+            output = result.stdout.strip() or result.stderr.strip()
+            if result.returncode != 0:
+                return f"Ошибка отключения: {output[:100]}, сэр."
+            return "Wi-Fi отключён, сэр."
+        except Exception as exc:
+            return f"Ошибка: {exc}, сэр."
     if IS_WINDOWS:
         try:
             subprocess.run(
