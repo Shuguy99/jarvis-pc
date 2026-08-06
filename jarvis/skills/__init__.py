@@ -6,7 +6,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from ..config import Config
-from . import apps, browser, calendar, desktop_notify as desktop_notify_mod, memory, personal, spotify, system, vision, weather, web
+from . import (
+    apps, browser, calendar, desktop_notify as desktop_notify_mod,
+    env, face, files, macros, memory, personal, spotify,
+    system, translator, vision, weather, web, youtube,
+)
 from .browser import BrowserSession
 from .memory import Memory
 from .personal import TimerService
@@ -59,6 +63,15 @@ def build_registry(config: Config, notify: Callable[[str], None]) -> tuple[Skill
     if skills_config.calendar.enabled:
         registry.extend(calendar.build_skills(skills_config.calendar))
     registry.extend(desktop_notify_mod.build_skills())
+    registry.extend(translator.build_skills())
+    registry.extend(env.build_skills())
+    registry.extend(macros.build_skills())
+    if skills_config.files.enabled:
+        registry.extend(files.build_skills(skills_config.files))
+    if skills_config.youtube.enabled:
+        registry.extend(youtube.build_skills(skills_config.youtube))
+    if skills_config.face.enabled:
+        registry.extend(face.build_skills(skills_config.face))
     # Пользовательские плагины — последними, могут переопределить встроенные.
     from .plugins import load_plugins
 

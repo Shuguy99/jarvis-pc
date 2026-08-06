@@ -102,6 +102,20 @@ skills:
     enabled: true
     ics_dir: "~/.jarvis/calendar"
 
+  files:                   # файловый менеджер
+    enabled: true
+    home_dir: "~"         # базовая директория для операций
+
+  youtube:                 # YouTube Music (yt-dlp + MPV)
+    enabled: true
+    audio_only: true        # только аудио, без видео
+    volume: 100
+
+  face:                    # распознавание лиц (OpenCV, отключено по умолчанию)
+    enabled: false
+    camera_index: 0
+    photo_dir: "~/Pictures/Jarvis"
+
   aliases:                 # голосовые сокращения -> полная команда для LLM
     тихо: "установи громкость на 20 процентов"
     громко: "установи громкость на 80 процентов"

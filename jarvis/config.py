@@ -191,6 +191,33 @@ class CalendarConfig:
 
 
 @dataclass
+class FilesConfig:
+    """Файловый менеджер."""
+
+    enabled: bool = True
+    home_dir: str = str(Path.home())
+    max_search_results: int = 20
+
+
+@dataclass
+class YouTubeConfig:
+    """YouTube Music через yt-dlp + MPV."""
+
+    enabled: bool = True
+    audio_only: bool = True
+    volume: int = 100
+
+
+@dataclass
+class FaceConfig:
+    """Распознавание лиц через OpenCV."""
+
+    enabled: bool = False
+    camera_index: int = 0
+    photo_dir: str = str(Path.home() / "Pictures" / "Jarvis")
+
+
+@dataclass
 class SkillsConfig:
     """Настройки навыков."""
 
@@ -208,6 +235,9 @@ class SkillsConfig:
     spotify: SpotifyConfig = field(default_factory=SpotifyConfig)
     weather: WeatherConfig = field(default_factory=WeatherConfig)
     calendar: CalendarConfig = field(default_factory=CalendarConfig)
+    files: FilesConfig = field(default_factory=FilesConfig)
+    youtube: YouTubeConfig = field(default_factory=YouTubeConfig)
+    face: FaceConfig = field(default_factory=FaceConfig)
 
 
 @dataclass
