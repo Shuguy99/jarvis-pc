@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from ..config import Config
-from . import apps, browser, memory, personal, spotify, system, vision, web
+from . import apps, browser, calendar, desktop_notify as desktop_notify_mod, memory, personal, spotify, system, vision, weather, web
 from .browser import BrowserSession
 from .memory import Memory
 from .personal import TimerService
@@ -36,7 +36,11 @@ class Services:
 
 
 def build_registry(config: Config, notify: Callable[[str], None]) -> tuple[SkillRegistry, Services]:
-    """Создаёт реестр всех навыков и связанные с ними службы."""
+    """Создаёт реестр всех навыков и связанные с ними службы.
+
+    Встроенные навыки регистрируются первыми, затем — пользовательские
+    плагины из ``~/.jarvis/skills/*.py``.
+    """
     skills_config = config.skills
     timers = TimerService(notify)
     memory_skills, memory_store = memory.build_skills(skills_config.memory)
@@ -50,4 +54,15 @@ def build_registry(config: Config, notify: Callable[[str], None]) -> tuple[Skill
     registry.extend(memory_skills)
     registry.extend(browser_skills)
     registry.extend(spotify.build_skills(skills_config))
+    if skills_config.weather.enabled:
+        registry.extend(weather.build_skills(skills_config.weather))
+    if skills_config.calendar.enabled:
+        registry.extend(calendar.build_skills(skills_config.calendar))
+    registry.extend(desktop_notify_mod.build_skills())
+    # Пользовательские плагины — последними, могут переопределить встроенные.
+    from .plugins import load_plugins
+
+    plugin_skills = load_plugins(config)
+    if plugin_skills:
+        registry.extend(plugin_skills)
     return registry, Services(timers, memory_store, browser_session)

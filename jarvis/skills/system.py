@@ -6,6 +6,7 @@ import ctypes
 import datetime as dt
 import logging
 import platform
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -60,38 +61,154 @@ def _set_volume_pycaw(level: int) -> bool:
     return True
 
 
+def _set_volume_linux(level: int) -> str | None:
+    """Устанавливает громкость через PulseAudio/PipeWire (pactl) или ALSA (amixer)."""
+    level_pct = max(0, min(100, int(level)))
+    # PulseAudio / PipeWire через pactl.
+    if shutil.which("pactl"):
+        try:
+            # Получаем индекс_sink для sink #0 (по умолчанию).
+            subprocess.run(
+                ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{level_pct}%"],
+                check=True,
+                timeout=5,
+            )
+            return f"Громкость установлена на {level_pct} процентов."
+        except (subprocess.CalledProcessError, FileNotFoundError, OSError) as exc:
+            log.warning("pactl не смог установить громкость: %s", exc)
+    # ALSA через amixer.
+    if shutil.which("amixer"):
+        try:
+            subprocess.run(
+                ["amixer", "-q", "sset", "Master", f"{level_pct}%"],
+                check=True,
+                timeout=5,
+            )
+            return f"Громкость установлена на {level_pct} процентов."
+        except (subprocess.CalledProcessError, FileNotFoundError, OSError) as exc:
+            log.warning("amixer не смог установить громкость: %s", exc)
+    return None
+
+
+def _change_volume_linux(delta: int) -> str | None:
+    """Меняет громкость на Linux через pactl, amixer или xdotool."""
+    # Получаем текущую громкость через pactl.
+    if shutil.which("pactl"):
+        try:
+            result = subprocess.run(
+                ["pactl", "get-sink-volume", "@DEFAULT_SINK@"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            # Парсим формат «Volume: front-left: 32768 /  50% / -18,06 dB ...»
+            for part in result.stdout.split():
+                if part.endswith("%"):
+                    current = int(part.rstrip("%"))
+                    new_level = max(0, min(100, current + int(delta)))
+                    return _set_volume_linux(new_level)
+        except (subprocess.CalledProcessError, ValueError, OSError) as exc:
+            log.warning("Не удалось получить текущую громкость через pactl: %s", exc)
+    # ALSA через amixer: относительное изменение.
+    if shutil.which("amixer"):
+        try:
+            subprocess.run(
+                ["amixer", "-q", "sset", "Master", f"{int(delta):+d}%"],
+                check=True,
+                timeout=5,
+            )
+            direction = "увеличена" if delta > 0 else "уменьшена"
+            return f"Громкость {direction} на {abs(int(delta))} процентов."
+        except (subprocess.CalledProcessError, FileNotFoundError, OSError) as exc:
+            log.warning("amixer не смог изменить громкость: %s", exc)
+    # Fallback: xdotool для мультимедийных клавиш.
+    if shutil.which("xdotool"):
+        key = "XF86AudioRaiseVolume" if delta > 0 else "XF86AudioLowerVolume"
+        steps = max(1, round(abs(int(delta)) / 5))
+        subprocess.run(["xdotool", "key", "--repeat", str(steps), key], check=False, timeout=5)
+        direction = "увеличена" if delta > 0 else "уменьшена"
+        return f"Громкость {direction} примерно на {abs(int(delta))} процентов."
+    return None
+
+
 def set_volume(level: int) -> str:
     """Устанавливает общую громкость системы в процентах."""
     level = max(0, min(100, int(level)))
-    if not IS_WINDOWS:
-        return "Управление громкостью поддерживается только в Windows, сэр."
-    if _set_volume_pycaw(level):
-        return f"Громкость установлена на {level} процентов."
-    # Без pycaw доступен только грубый шаг клавишами (2% на нажатие).
-    _tap_key(VK_VOLUME_DOWN, 50)
-    _tap_key(VK_VOLUME_UP, round(level / 2))
-    return f"Громкость примерно {level} процентов."
+    if IS_WINDOWS:
+        if _set_volume_pycaw(level):
+            return f"Громкость установлена на {level} процентов."
+        # Без pycaw доступен только грубый шаг клавишами (2% на нажатие).
+        _tap_key(VK_VOLUME_DOWN, 50)
+        _tap_key(VK_VOLUME_UP, round(level / 2))
+        return f"Громкость примерно {level} процентов."
+    # Linux / macOS.
+    result = _set_volume_linux(level)
+    if result:
+        return result
+    return "Управление громкостью недоступно. Установите pactl (PulseAudio) или amixer (ALSA)."
 
 
 def change_volume(delta: int) -> str:
     """Меняет громкость на указанное число процентов."""
-    if not IS_WINDOWS:
-        return "Управление громкостью поддерживается только в Windows, сэр."
-    steps = max(1, round(abs(int(delta)) / 2))
-    _tap_key(VK_VOLUME_UP if delta > 0 else VK_VOLUME_DOWN, steps)
-    direction = "увеличена" if delta > 0 else "уменьшена"
-    return f"Громкость {direction} на {abs(int(delta))} процентов."
+    if IS_WINDOWS:
+        steps = max(1, round(abs(int(delta)) / 2))
+        _tap_key(VK_VOLUME_UP if delta > 0 else VK_VOLUME_DOWN, steps)
+        direction = "увеличена" if delta > 0 else "уменьшена"
+        return f"Громкость {direction} на {abs(int(delta))} процентов."
+    result = _change_volume_linux(delta)
+    if result:
+        return result
+    return "Управление громкостью недоступно, сэр."
 
 
 def media_control(action: str) -> str:
     """Управляет воспроизведением мультимедиа."""
-    key = MEDIA_KEYS.get(action.lower())
-    if key is None:
+    action_lower = action.lower()
+    if IS_WINDOWS:
+        key = MEDIA_KEYS.get(action_lower)
+        if key is None:
+            return f"Не знаю команду «{action}», сэр."
+        _tap_key(key)
+        return f"Готово: {action}."
+    # Linux: xdotool для мультимедийных клавиш.
+    if shutil.which("xdotool"):
+        x11_keys = {
+            "play": "XF86AudioPlay",
+            "pause": "XF86AudioPlay",
+            "next": "XF86AudioNext",
+            "previous": "XF86AudioPrev",
+            "mute": "XF86AudioMute",
+        }
+        x11_key = x11_keys.get(action_lower)
+        if x11_key:
+            subprocess.run(["xdotool", "key", x11_key], check=False, timeout=5)
+            return f"Готово: {action}."
         return f"Не знаю команду «{action}», сэр."
-    if not IS_WINDOWS:
-        return "Мультимедийные клавиши доступны только в Windows, сэр."
-    _tap_key(key)
-    return f"Готово: {action}."
+    # macOS: applescript.
+    if platform.system() == "Darwin":
+        if action_lower in ("play", "pause"):
+            subprocess.run(["osascript", "-e", "tell application \"System Events\" to key code 16"], check=False, timeout=5)
+            return f"Готово: {action}."
+        return f"Мультимедиа на macOS пока ограничено, сэр."
+    return "Мультимедийные клавиши недоступны. Установите xdotool."
+
+
+def lock_workstation() -> str:
+    """Блокирует рабочую станцию."""
+    if IS_WINDOWS:
+        ctypes.windll.user32.LockWorkStation()  # type: ignore[attr-defined]
+        return "Рабочая станция заблокирована, сэр."
+    if platform.system() == "Darwin":
+        subprocess.run([r"/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession", "-suspend"], check=False, timeout=5)
+        return "Рабочая станция заблокирована, сэр."
+    # Linux: loginctl, gnome-screensaver, xdg-screensaver.
+    if shutil.which("loginctl"):
+        subprocess.run(["loginctl", "lock-session"], check=False, timeout=5)
+        return "Рабочая станция заблокирована, сэр."
+    if shutil.which("xdg-screensaver"):
+        subprocess.run(["xdg-screensaver", "lock"], check=False, timeout=5)
+        return "Рабочая станция заблокирована, сэр."
+    return "Блокировка экрана не поддерживается на этой системе, сэр."
 
 
 def take_screenshot(config: SkillsConfig, name: str = "") -> str:
@@ -132,33 +249,35 @@ def system_status() -> str:
     return ", ".join(parts) + "."
 
 
-def lock_workstation() -> str:
-    """Блокирует рабочую станцию."""
-    if not IS_WINDOWS:
-        return "Блокировка поддерживается только в Windows, сэр."
-    ctypes.windll.user32.LockWorkStation()  # type: ignore[attr-defined]
-    return "Рабочая станция заблокирована, сэр."
-
-
 def power_action(config: SkillsConfig, action: str, delay_s: int = 20) -> str:
     """Выключает, перезагружает ПК или отменяет запланированное действие."""
     action = action.lower()
     if action != "cancel" and not config.allow_shutdown:
         return "Выключение отключено в конфигурации. Включите skills.allow_shutdown, сэр."
-    if not IS_WINDOWS:
-        return "Управление питанием реализовано только для Windows, сэр."
-    commands = {
-        "shutdown": ["shutdown", "/s", "/t", str(max(0, delay_s))],
-        "restart": ["shutdown", "/r", "/t", str(max(0, delay_s))],
-        "cancel": ["shutdown", "/a"],
-    }
+    # Linux shutdown принимает время в минутах, Windows — в секундах.
+    delay_min = max(1, round(delay_s / 60))
+    commands: dict[str, list[str]] = {}
+    if IS_WINDOWS:
+        commands = {
+            "shutdown": ["shutdown", "/s", "/t", str(max(0, delay_s))],
+            "restart": ["shutdown", "/r", "/t", str(max(0, delay_s))],
+            "cancel": ["shutdown", "/a"],
+        }
+    else:
+        commands = {
+            "shutdown": ["shutdown", "-h", f"+{delay_min}"],
+            "restart": ["shutdown", "-r", f"+{delay_min}"],
+            "cancel": ["shutdown", "-c"],
+        }
     command = commands.get(action)
     if command is None:
         return f"Неизвестное действие питания: {action}."
     subprocess.run(command, check=False)
     if action == "cancel":
         return "Запланированное выключение отменено."
-    return f"Принято. {action} через {delay_s} секунд, сэр."
+    if IS_WINDOWS:
+        return f"Принято. {action} через {delay_s} секунд, сэр."
+    return f"Принято. {action} через {delay_min} мину{'ту' if delay_min == 1 else 'ты' if 1 < delay_min < 5 else 'т'}, сэр."
 
 
 def build_skills(config: SkillsConfig) -> list[Skill]:

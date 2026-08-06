@@ -18,6 +18,21 @@ log = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
+# Разрешённые клавиши для browser_press (защита от произвольного ввода).
+_ALLOWED_KEYS = frozenset({
+    "Enter", "Tab", "Escape", "Backspace", "Delete", "Home", "End",
+    "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
+    "PageUp", "PageDown", "Control+a", "Control+c", "Control+v",
+    "Control+x", "Control+z", "Control+A", "Control+C", "Control+V",
+    "Control+X", "Control+Z", "Control+Enter", "Shift+Tab",
+    "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
+    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
+    "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+    "Space", "Minus", "Equal", "BracketLeft", "BracketRight",
+    "Backslash", "Semicolon", "Quote", "Backquote", "Comma", "Period", "Slash",
+})
+
 INSTALL_HINT = (
     "Playwright не установлен, сэр. Выполните: pip install playwright "
     "и затем playwright install chromium."
@@ -110,16 +125,25 @@ class BrowserSession:
                 page.get_by_placeholder(field, exact=False),
                 page.get_by_role("textbox", name=field),
             ):
-                if locator.count():
-                    locator.first.fill(text)
-                    return f"Ввёл текст в поле «{field}»."
-            page.locator(field).first.fill(text)
-            return f"Ввёл текст в «{field}»."
+                try:
+                    if locator.count():
+                        locator.first.fill(text)
+                        return f"Ввёл текст в поле «{field}»."
+                except Exception:
+                    continue
+            # Fallback: пробуем как CSS-селектор.
+            try:
+                page.locator(field).first.fill(text)
+                return f"Ввёл текст в «{field}»."
+            except Exception as exc:
+                return f"Не нашёл поле «{field}»: {exc}"
 
         return self._run(work)
 
     def press(self, key: str) -> str:
         """Нажимает клавишу на странице, например Enter."""
+        if key not in _ALLOWED_KEYS:
+            return f"Клавиша «{key}» не в списке разрешённых, сэр."
 
         def work(page: Page) -> str:
             page.keyboard.press(key)
@@ -164,8 +188,11 @@ class BrowserSession:
     def shutdown(self) -> None:
         """Гасит браузер и поток при выходе из приложения."""
         if self._page is not None:
-            self.close()
-        self._pool.shutdown(wait=False)
+            try:
+                self.close()
+            except Exception:
+                log.exception("Не удалось закрыть браузер при shutdown")
+        self._pool.shutdown(wait=False, cancel_futures=True)
 
 
 def build_skills(config: BrowserConfig) -> tuple[list[Skill], BrowserSession]:

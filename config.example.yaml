@@ -92,3 +92,23 @@ skills:
     enabled: false         # true + SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET в окружении
     redirect_uri: "http://127.0.0.1:8888/callback"
     launch_app: true
+
+  weather:                 # погода (wttr.in бесплатно, OWM точнее)
+    enabled: true
+    default_city: "Новосибирск"
+    api_key: ""           # OpenWeatherMap ключ (необязательно, без него — wttr.in)
+
+  calendar:                # локальный календарь через ICS файлы
+    enabled: true
+    ics_dir: "~/.jarvis/calendar"
+
+  aliases:                 # голосовые сокращения -> полная команда для LLM
+    тихо: "установи громкость на 20 процентов"
+    громко: "установи громкость на 80 процентов"
+    музыка: "открой приложение Spotify"
+    погода: "какая сейчас погода"
+    расписание: "покажи события на сегодня"
+
+# Алиасы верхнего уровня (альтернатива skills.aliases)
+# aliases:
+#   стоп: "остановить музыку"  

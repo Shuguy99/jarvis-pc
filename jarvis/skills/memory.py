@@ -123,11 +123,17 @@ class ChromaMemory:
         matches = self.search(query, top_k=50)
         if not matches:
             return 0
-        found = self._collection.get(where_document={"$contains": matches[0]})
-        ids = list(found.get("ids") or [])
-        if ids:
-            self._collection.delete(ids=ids)
-        return len(ids)
+        deleted_total = 0
+        for match in matches:
+            try:
+                found = self._collection.get(where_document={"$contains": match})
+                ids = list(found.get("ids") or [])
+                if ids:
+                    self._collection.delete(ids=ids)
+                    deleted_total += len(ids)
+            except Exception:
+                log.warning("Не удалось удалить запись из ChromaDB: %s", match, exc_info=True)
+        return deleted_total
 
 
 def build_store(config: MemoryConfig) -> MemoryStore:

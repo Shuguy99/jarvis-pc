@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass, field, fields, is_dataclass
+from dataclasses import MISSING, dataclass, field, fields, is_dataclass
 from pathlib import Path
 from typing import Any, TypeVar, get_type_hints
 
 import yaml
+
+log = logging.getLogger(__name__)
 
 DEFAULT_CONFIG_PATHS = (
     Path("config.yaml"),
@@ -171,6 +174,23 @@ class SpotifyConfig:
 
 
 @dataclass
+class WeatherConfig:
+    """Настройки погоды: wttr.in (без ключа) или OpenWeatherMap."""
+
+    enabled: bool = True
+    default_city: str = "Москва"
+    api_key: str = ""  # OpenWeatherMap API ключ (необязательно)
+
+
+@dataclass
+class CalendarConfig:
+    """Настройки локального календаря через ICS файлы."""
+
+    enabled: bool = True
+    ics_dir: str = str(Path.home() / ".jarvis" / "calendar")
+
+
+@dataclass
 class SkillsConfig:
     """Настройки навыков."""
 
@@ -179,10 +199,15 @@ class SkillsConfig:
     notes_file: str = str(Path.home() / ".jarvis" / "notes.md")
     search_engine: str = "https://duckduckgo.com/?q={query}"
     apps: dict[str, str] = field(default_factory=dict)
+    # Алиасы: короткая фраза -> подсказка для LLM
+    # Например: "тихо" -> "установи громкость на 20 процентов"
+    aliases: dict[str, str] = field(default_factory=dict)
     vision: VisionConfig = field(default_factory=VisionConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     browser: BrowserConfig = field(default_factory=BrowserConfig)
     spotify: SpotifyConfig = field(default_factory=SpotifyConfig)
+    weather: WeatherConfig = field(default_factory=WeatherConfig)
+    calendar: CalendarConfig = field(default_factory=CalendarConfig)
 
 
 @dataclass
@@ -200,6 +225,9 @@ class Config:
     ui: UiConfig = field(default_factory=UiConfig)
     monitor: MonitorConfig = field(default_factory=MonitorConfig)
     skills: SkillsConfig = field(default_factory=SkillsConfig)
+    aliases: dict[str, str] = field(default_factory=lambda: {
+        # Алиасы верхнего уровня (если не заданы в skills.aliases)
+    })
 
     @property
     def openai_api_key(self) -> str:
@@ -223,6 +251,106 @@ def _build(cls: type[T], data: Mapping[str, Any]) -> T:
     return cls(**kwargs)
 
 
+# Правила валидации: (имя_поля, тип_или_кортеж_типов, мин, макс).
+# None означает «не проверять».
+_VALIDATION_RULES: dict[str, tuple[type | tuple[type, ...] | None, Any, Any]] = {
+    # MicConfig
+    "sample_rate": (int, 8000, 48000),
+    "frame_ms": (int, 10, 100),
+    "vad_aggressiveness": (int, 0, 3),
+    "silence_ms": (int, 100, 5000),
+    "max_utterance_s": ((int, float), 1.0, 120.0),
+    "preroll_ms": (int, 0, 2000),
+    # TtsConfig
+    "rate": (int, 50, 450),
+    "volume": ((int, float), 0.0, 1.0),
+    # WakeWordConfig
+    "threshold": ((int, float), 0.1, 1.0),
+    # BrainConfig
+    "temperature": ((int, float), 0.0, 2.0),
+    "max_history": (int, 2, 100),
+    "max_tool_iterations": (int, 1, 20),
+    # UiConfig
+    "opacity": ((int, float), 0.1, 1.0),
+    "width": (int, 100, 2000),
+    "height": (int, 80, 1000),
+    # MonitorConfig
+    "interval_s": ((int, float), 5.0, 3600.0),
+    "repeat_after_s": ((int, float), 10.0, 86400.0),
+    "battery_low": (int, 5, 95),
+    "battery_critical": (int, 1, 50),
+    "memory_high": (int, 50, 99),
+    "disk_high": (int, 50, 99),
+    "cpu_high": (int, 50, 100),
+    "cpu_samples": (int, 1, 30),
+    # VisionConfig
+    "max_side_px": (int, 200, 7680),
+    # MemoryConfig
+    "top_k": (int, 1, 50),
+    # BrowserConfig
+    "timeout_ms": (int, 1000, 120000),
+    "max_text_chars": (int, 100, 100000),
+}
+
+
+def _sanitize(cls: type[Any], data: Mapping[str, Any], prefix: str = "") -> dict[str, Any]:
+    """Проверяет типы и диапазоны, возвращая исправленную копию данных."""
+    hints = get_type_hints(cls)
+    out: dict[str, Any] = dict(data)  # mutable copy
+    for f in fields(cls):  # type: ignore[arg-type]
+        if f.name not in out:
+            continue
+        value = out[f.name]
+        full_name = f"{prefix}{f.name}"
+        hint = hints.get(f.name)
+
+        # Рекурсивная обработка вложенных dataclass.
+        if is_dataclass(hint) and isinstance(value, Mapping):
+            out[f.name] = _sanitize(hint, value, full_name + ".")  # type: ignore[arg-type]
+            continue
+
+        rule = _VALIDATION_RULES.get(f.name)
+        if rule is None:
+            continue
+        expected_types, min_val, max_val = rule
+
+        # Проверка типа: при несоответствии — сбрасываем в default.
+        if expected_types is not None and not isinstance(value, expected_types):
+            log.warning(
+                "Конфиг %s: ожидается %s, получено %s (%r). Берётся значение по умолчанию.",
+                full_name,
+                expected_types,
+                type(value).__name__,
+                value,
+            )
+            if f.default is not MISSING:
+                out[f.name] = f.default
+            elif f.default_factory is not MISSING:
+                out[f.name] = f.default_factory()
+            continue
+
+        # Проверка диапазона: clamp к [min, max].
+        if min_val is not None and value < min_val:
+            log.warning(
+                "Конфиг %s: значение %r меньше минимума %s. Исправляю на %s.",
+                full_name,
+                value,
+                min_val,
+                min_val,
+            )
+            out[f.name] = min_val
+        if max_val is not None and value > max_val:
+            log.warning(
+                "Конфиг %s: значение %r больше максимума %s. Исправляю на %s.",
+                full_name,
+                value,
+                max_val,
+                max_val,
+            )
+            out[f.name] = max_val
+    return out
+
+
 def load_config(path: str | os.PathLike[str] | None = None) -> Config:
     """Загружает конфигурацию из YAML-файла, возвращая значения по умолчанию."""
     candidates = [Path(path)] if path else list(DEFAULT_CONFIG_PATHS)
@@ -231,5 +359,6 @@ def load_config(path: str | os.PathLike[str] | None = None) -> Config:
             raw = yaml.safe_load(candidate.read_text(encoding="utf-8")) or {}
             if not isinstance(raw, Mapping):
                 raise ValueError(f"Некорректный конфиг: {candidate}")
-            return _build(Config, raw)
+            sanitized = _sanitize(Config, raw)
+            return _build(Config, sanitized)
     return Config()

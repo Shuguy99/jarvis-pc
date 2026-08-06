@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import os
 import platform
+import re
 import shutil
 import subprocess
+
+# Допустимые символы в имени команды (латиница, кириллица, цифры, пробелы, точки, дефисы, слеши).
+_SAFE_CMD_RE = re.compile(r'^[\w\-./ :\\а-яА-ЯёЁ]+$')
 
 from ..config import SkillsConfig
 from .registry import Skill, object_schema
@@ -58,6 +62,9 @@ def open_app(config: SkillsConfig, name: str) -> str:
 
         webbrowser.open("https://www.google.com")
         return "Открываю браузер, сэр."
+    # Защита от command injection: не пропускаем команды с метасимволами shell.
+    if not _SAFE_CMD_RE.match(command):
+        return f"Слишком хитрое имя «{name}», сэр. Не могу гарантировать безопасность."
     try:
         if IS_WINDOWS:
             os.startfile(command)  # type: ignore[attr-defined]
@@ -81,13 +88,24 @@ def close_app(name: str) -> str:
         return "Уточните, что закрыть, сэр."
     killed = 0
     for process in psutil.process_iter(["name"]):
-        process_name = (process.info.get("name") or "").lower()
-        if needle in process_name.removesuffix(".exe"):
+        process_name = (process.info.get("name") or "").lower().removesuffix(".exe")
+        # Точное совпадение или совпадение полного имени процесса
+        # (защита от ложных срабатываний: «chrome» не убьёт «chromedriver")
+        if process_name == needle:
             try:
                 process.terminate()
                 killed += 1
             except (psutil.AccessDenied, psutil.NoSuchProcess):
                 continue
+        elif needle in process_name and len(needle) >= 4:
+            # Для коротких запросов (>=4 символа) допускаем подстроку,
+            # но только если имена близки по длине (не более чем в 1.5 раза длиннее).
+            if len(process_name) <= len(needle) * 1.5:
+                try:
+                    process.terminate()
+                    killed += 1
+                except (psutil.AccessDenied, psutil.NoSuchProcess):
+                    continue
     if not killed:
         return f"Процессы «{name}» не найдены, сэр."
     return f"Закрыл {killed} процессов «{name}»."

@@ -8,7 +8,7 @@ from typing import Any
 
 from ..config import BrainConfig
 from ..skills import SkillRegistry
-from .base import Brain, Message, ToolCall, parse_arguments
+from .base import Brain, Message, OnToolResult, ToolCall, parse_arguments
 
 
 def _serialize(message: Message) -> dict[str, Any]:
@@ -38,15 +38,17 @@ def _serialize(message: Message) -> dict[str, Any]:
 class OpenAIBrain(Brain):
     """Использует Chat Completions API с нативным function calling."""
 
-    def __init__(self, config: BrainConfig, skills: SkillRegistry, api_key: str):
-        super().__init__(config, skills)
+    _TIMEOUT_S = 120
+
+    def __init__(self, config: BrainConfig, skills: SkillRegistry, api_key: str, on_tool_result: OnToolResult | None = None):
+        super().__init__(config, skills, on_tool_result)
         try:
             from openai import OpenAI  # type: ignore[import-not-found]
         except ImportError as exc:
             raise RuntimeError("Не установлен пакет openai. Выполните: pip install openai") from exc
         if not api_key:
             raise RuntimeError("Не задан OPENAI_API_KEY. Добавьте ключ в переменные окружения.")
-        kwargs: dict[str, Any] = {"api_key": api_key}
+        kwargs: dict[str, Any] = {"api_key": api_key, "timeout": self._TIMEOUT_S}
         if config.openai_base_url:
             kwargs["base_url"] = config.openai_base_url
         self._client = OpenAI(**kwargs)

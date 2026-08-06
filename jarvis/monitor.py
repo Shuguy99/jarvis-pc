@@ -131,6 +131,8 @@ class SystemMonitor:
         log.info("Мониторинг системы запущен, интервал %.0f с", self.config.interval_s)
 
     def shutdown(self) -> None:
-        """Останавливает мониторинг."""
+        """Останавливает мониторинг и ждёт завершения потока."""
         self._stop.set()
+        if self._thread is not None and self._thread.is_alive():
+            self._thread.join(timeout=5.0)
         self._thread = None

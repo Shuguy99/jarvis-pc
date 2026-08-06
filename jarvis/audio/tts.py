@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import platform
 import subprocess
 import tempfile
 import threading
+import uuid
 from pathlib import Path
 
 from ..config import TtsConfig
@@ -60,43 +62,94 @@ class Speaker:
         except ImportError:
             log.warning("edge-tts не установлен, откат на системный голос")
             return False
-        path = Path(tempfile.gettempdir()) / "jarvis-tts.mp3"
+        tmp = Path(tempfile.gettempdir()) / f"jarvis-tts-{uuid.uuid4().hex[:8]}.mp3"
 
         async def synthesize() -> None:
             communicate = edge_tts.Communicate(text, self.config.edge_voice)
-            await communicate.save(str(path))
+            await communicate.save(str(tmp))
 
         try:
-            asyncio.run(synthesize())
+            # Если уже есть event loop (например, Qt), не создаём новый.
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    future = pool.submit(asyncio.run, synthesize())
+                    future.result(timeout=30)
+            except RuntimeError:
+                asyncio.run(synthesize())
         except Exception:
             log.exception("Edge TTS не смог синтезировать речь")
+            tmp.unlink(missing_ok=True)
             return False
-        return self._play(path)
+        try:
+            return self._play(tmp)
+        finally:
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     @staticmethod
     def _play(path: Path) -> bool:
         """Воспроизводит аудиофайл доступным способом."""
+        # Защита: путь должен быть нормализованным абсолютным путём к файлу .mp3/.wav.
+        try:
+            resolved = path.resolve()
+            if not resolved.is_file():
+                log.error("Файл не существует: %s", resolved)
+                return False
+            if resolved.suffix.lower() not in (".mp3", ".wav", ".ogg", ".flac"):
+                log.error("Неподдерживаемый формат: %s", resolved.suffix)
+                return False
+            path = resolved
+        except (OSError, ValueError) as exc:
+            log.error("Некорректный путь: %s — %s", path, exc)
+            return False
+
         try:
             from playsound3 import playsound  # type: ignore[import-not-found]
 
-            playsound(str(path))
-            return True
+            # playsound3 блокирует и не умеет timeout,
+            # поэтому запускаем в потоке с ограничением.
+            result = [False]
+            def _play_thread() -> None:
+                try:
+                    playsound(str(path))
+                    result[0] = True
+                except Exception:
+                    pass
+            t = threading.Thread(target=_play_thread, daemon=True)
+            t.start()
+            t.join(timeout=30)
+            if result[0]:
+                return True
+            log.warning("playsound3 завис, переключаюсь на другой плеер")
         except ImportError:
             pass
         if platform.system() == "Windows":
+            # Экранируем путь одинарными кавычками для PowerShell
+            # и дополнительно оборачиваем в двойные кавычки.
+            safe_path = str(path).replace("'", "''")
             subprocess.run(
                 [
                     "powershell",
                     "-NoProfile",
                     "-Command",
-                    f"(New-Object Media.SoundPlayer '{path}').PlaySync();",
+                    f"(New-Object Media.SoundPlayer '{safe_path}').PlaySync();",
                 ],
                 check=False,
             )
             return True
-        for player in ("ffplay", "aplay", "mpv"):
+        # Linux / macOS: пробуем плееры по порядку.
+        players: list[tuple[list[str], bool]] = [
+            (["ffplay", "-nodisp", "-autoexit", str(path)], True),
+            (["mpv", "--no-video", "--really-quiet", str(path)], True),
+            (["aplay", str(path)], False),
+        ]
+        for cmd, _shell in players:
             try:
-                subprocess.run([player, "-nodisp", "-autoexit", str(path)], check=False)
+                subprocess.run(cmd, check=False, timeout=60)
                 return True
             except FileNotFoundError:
                 continue

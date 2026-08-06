@@ -32,6 +32,117 @@ STATE_SPEED = {
 }
 CORNER_MARGIN = 24
 
+PREVIEW_WIDTH = 460
+PREVIEW_MAX_HEIGHT = 320
+PREVIEW_AUTO_HIDE_S = 18
+PREVIEW_FADE_STEPS = 20
+PREVIEW_FADE_INTERVAL_MS = 50
+
+
+class SearchPreviewPopup(QWidget):
+    """Небольшое полупрозрачное некликабельное окно с результатами поиска.
+
+    Появляется на 18 секунд, затем плавно исчезает. Клики проходят
+    сквозь него (WA_TransparentForMouseEvents).
+    """
+
+    def __init__(self, accent: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._accent = QColor(accent)
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.Tool
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # Некликабельность: клики проходят насквозь.
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(16, 12, 16, 12)
+        self._layout.setSpacing(4)
+        self._title = QLabel("")
+        self._title.setFont(QFont("Consolas", 10, QFont.Weight.Bold))
+        self._title.setStyleSheet(f"color: {accent}; border: none;")
+        self._body = QLabel("")
+        self._body.setFont(QFont("Consolas", 9))
+        self._body.setStyleSheet("color: #c0e8ff; border: none;")
+        self._body.setWordWrap(True)
+        self._layout.addWidget(self._title)
+        self._layout.addWidget(self._body)
+
+        self._hide_timer = QTimer(self, singleShot=True)
+        self._hide_timer.timeout.connect(self._start_fade)
+        self._fade_step = 0
+        self._fade_timer = QTimer(self)
+        self._fade_timer.timeout.connect(self._fade_tick)
+
+    # ── public ─────────────────────────────────────────────────────────
+
+    def show_results(self, title: str, body: str) -> None:
+        """Показывает окошко с результатами и запускает таймер авто-скрытия."""
+        self._title.setText(title)
+        self._body.setText(body)
+        self._body.adjustSize()
+        self._title.adjustSize()
+        # Размер: по содержимому, но не шире PREVIEW_WIDTH и не выше PREVIEW_MAX_HEIGHT.
+        w = max(PREVIEW_WIDTH, self._title.sizeHint().width() + 32, self._body.sizeHint().width() + 32)
+        h = self._title.sizeHint().height() + self._body.sizeHint().height() + 28
+        w = min(w, 700)
+        h = min(h, PREVIEW_MAX_HEIGHT)
+        self.setFixedSize(w, h)
+        self._place()
+        # Сброс прозрачности.
+        self._fade_step = 0
+        self.setWindowOpacity(0.82)
+        self.show()
+        self._hide_timer.start(int(PREVIEW_AUTO_HIDE_S * 1000))
+
+    def dismiss(self) -> None:
+        """Сразу убирает окошко."""
+        self._hide_timer.stop()
+        self._fade_timer.stop()
+        self.hide()
+
+    # ── internal ───────────────────────────────────────────────────────
+
+    def _place(self) -> None:
+        """Центрируем по нижней трети экрана."""
+        screen = QApplication.primaryScreen()
+        if screen is None:
+            return
+        area = screen.availableGeometry()
+        x = area.center().x() - self.width() // 2
+        y = area.bottom() - self.height() - 80
+        self.move(x, y)
+
+    def _start_fade(self) -> None:
+        """Запускает плавное затухание."""
+        self._fade_step = 0
+        self._fade_timer.start(PREVIEW_FADE_INTERVAL_MS)
+
+    def _fade_tick(self) -> None:
+        """Шаг затухания."""
+        self._fade_step += 1
+        opacity = 0.82 * (1 - self._fade_step / PREVIEW_FADE_STEPS)
+        if opacity <= 0.02:
+            self._fade_timer.stop()
+            self.hide()
+            return
+        self.setWindowOpacity(opacity)
+
+    def paintEvent(self, event: object) -> None:  # noqa: N802 - Qt API
+        """Рисует полупрозрачную тёмную панель с акцентной рамкой."""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        accent = self._accent
+        painter.setBrush(QColor(6, 14, 22, 200))
+        pen = QPen(QColor(accent.red(), accent.green(), accent.blue(), 120))
+        pen.setWidth(1)
+        painter.setPen(pen)
+        painter.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), 10, 10)
+        painter.end()
+
 
 class ReactorWidget(QWidget):
     """Анимированное «ядро реактора», реагирующее на состояние ассистента."""
@@ -132,6 +243,9 @@ class HudWindow(QWidget):
         self._user_label.setStyleSheet("color: #9fe8ff;")
         self._reply_label.setStyleSheet("color: #eaffff;")
 
+        # Всплывающее окно результатов поиска.
+        self._preview = SearchPreviewPopup(config.accent)
+
         text_column = QVBoxLayout()
         text_column.addWidget(self._state_label)
         text_column.addWidget(self._user_label)
@@ -181,6 +295,12 @@ class HudWindow(QWidget):
         """Обновляет тексты и анимацию по событию ассистента."""
         self._state_label.setText(STATE_LABELS.get(event.state, event.state.value))
         self._reactor.set_state(event.state)
+        # Всплывающее окно результатов поиска.
+        if event.preview_url and event.text:
+            self._preview.show_results(
+                title="Результаты поиска",
+                body=event.text,
+            )
         if not event.text:
             return
         if event.speaker == "user":
@@ -205,5 +325,6 @@ class HudWindow(QWidget):
 
     def closeEvent(self, event: object) -> None:  # noqa: N802 - Qt API
         """Сообщает ядру о закрытии интерфейса."""
+        self._preview.dismiss()
         self._on_close()
         event.accept()  # type: ignore[attr-defined]

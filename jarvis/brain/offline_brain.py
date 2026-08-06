@@ -10,7 +10,7 @@ from typing import Any
 
 from ..config import BrainConfig
 from ..skills import SkillRegistry
-from .base import Brain, Message
+from .base import Brain, Message, OnToolResult
 
 MINUTE_WORDS = ("минут", "минуты", "минуту")
 
@@ -89,6 +89,16 @@ RULES: tuple[Rule, ...] = (
         "open_url",
         lambda m: {"url": m.group("url")},
     ),
+    # ПЕРЕД open_app — иначе «открой в браузере» схватится как «открой (в браузере)».
+    Rule(
+        re.compile(
+            r"открой (?:результаты )?в браузере|открой результаты браузере|"
+            r"покажи в браузере|покажи полностью|подробнее",
+            re.IGNORECASE,
+        ),
+        "open_in_browser",
+        lambda m: {},
+    ),
     Rule(
         re.compile(r"(открой|запусти) (?P<app>.+)"),
         "open_app",
@@ -155,8 +165,8 @@ def match_rule(text: str) -> tuple[str, dict[str, Any]] | None:
 class OfflineBrain(Brain):
     """Работает без сети: сопоставляет фразы с навыками по регулярным выражениям."""
 
-    def __init__(self, config: BrainConfig, skills: SkillRegistry) -> None:
-        super().__init__(config, skills)
+    def __init__(self, config: BrainConfig, skills: SkillRegistry, on_tool_result: OnToolResult | None = None) -> None:
+        super().__init__(config, skills, on_tool_result)
 
     def _chat(self, messages: list[Message]) -> Message:
         """Заглушка: офлайн-режим не обращается к модели."""
@@ -164,11 +174,25 @@ class OfflineBrain(Brain):
 
     def ask(self, user_text: str) -> str:
         """Выполняет навык по правилу либо честно сообщает о непонимании."""
-        matched = match_rule(user_text)
-        if matched is None:
-            return (
-                "Без языковой модели я понимаю только прямые команды, сэр. "
-                "Например: «открой блокнот» или «какая погода в Москве»."
-            )
-        skill, arguments = matched
-        return self.skills.call(skill, arguments)
+        # Сохраняем в историю (как делает base Brain) для консистентности.
+        with self._lock:
+            self.history.append(Message("user", user_text))
+            self._trim()
+            matched = match_rule(user_text)
+            if matched is None:
+                reply = (
+                    "Без языковой модели я понимаю только прямые команды, сэр. "
+                    "Например: «открой блокнот» или «какая погода в Москве»."
+                )
+            else:
+                skill, arguments = matched
+                reply = self.skills.call(skill, arguments)
+                if self._on_tool_result is not None:
+                    try:
+                        self._on_tool_result(skill, reply)
+                    except Exception:
+                        pass
+            self.history.append(Message("assistant", reply))
+            self._trim()
+            self.save_session()
+            return reply
