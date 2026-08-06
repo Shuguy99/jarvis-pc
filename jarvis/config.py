@@ -219,6 +219,58 @@ class SoundsConfig:
 
 
 @dataclass
+class PomodoroConfig:
+    """Помодоро-таймер."""
+
+    enabled: bool = True
+    work_min: int = 25
+    break_min: int = 5
+    long_break_min: int = 15
+    stats_file: str = str(Path.home() / ".jarvis" / "pomodoro_stats.json")
+
+
+@dataclass
+class NewsConfig:
+    """RSS / Новости."""
+
+    enabled: bool = True
+    feeds: list[dict[str, str]] = field(default_factory=list)  # [{name, url}]
+
+
+@dataclass
+class CurrencyConfig:
+    """Конвертер валют."""
+
+    enabled: bool = True
+
+
+@dataclass
+class HomeAssistantConfig:
+    """Home Assistant умный дом."""
+
+    enabled: bool = False
+    url: str = "http://homeassistant.local:8123"
+    token: str = ""  # Long-lived access token
+
+
+@dataclass
+class TelegramConfig:
+    """Telegram бот."""
+
+    enabled: bool = False
+    bot_token: str = ""  # от @BotFather
+    chat_id: str = ""  # ID чата или группы
+
+
+@dataclass
+class AlarmConfig:
+    """Будильники."""
+
+    enabled: bool = True
+    snooze_min: int = 5
+
+
+@dataclass
 class FilesConfig:
     """Файловый менеджер."""
 
@@ -269,6 +321,12 @@ class SkillsConfig:
     github: GitHubConfig = field(default_factory=GitHubConfig)
     vpn: VpnConfig = field(default_factory=VpnConfig)
     sounds: SoundsConfig = field(default_factory=SoundsConfig)
+    pomodoro: PomodoroConfig = field(default_factory=PomodoroConfig)
+    news: NewsConfig = field(default_factory=NewsConfig)
+    currency: CurrencyConfig = field(default_factory=CurrencyConfig)
+    homeassistant: HomeAssistantConfig = field(default_factory=HomeAssistantConfig)
+    telegram: TelegramConfig = field(default_factory=TelegramConfig)
+    alarm: AlarmConfig = field(default_factory=AlarmConfig)
 
 
 @dataclass

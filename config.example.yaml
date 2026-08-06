@@ -130,6 +130,35 @@ skills:
     enabled: false
     sounds_dir: "~/.jarvis/sounds"
 
+  pomodoro:                # помодоро-таймер (25/5/15)
+    enabled: true
+    work_min: 25
+    break_min: 5
+    long_break_min: 15
+
+  news:                    # RSS ленты новостей (Habr, HN, Лента)
+    enabled: true
+    # feeds:
+    #   - name: "Habr"
+    #     url: "https://habr.com/ru/rss/best/daily/"
+
+  currency:                # конвертер валют (exchangerate-api.com)
+    enabled: true
+
+  homeassistant:           # умный дом через Home Assistant
+    enabled: false
+    url: "http://homeassistant.local:8123"
+    token: ""             # Long-lived access token
+
+  telegram:                # отправка сообщений через Telegram
+    enabled: false
+    bot_token: ""          # от @BotFather
+    chat_id: ""            # ID чата
+
+  alarm:                   # будильники
+    enabled: true
+    snooze_min: 5
+
   aliases:                 # голосовые сокращения -> полная команда для LLM
     тихо: "установи громкость на 20 процентов"
     громко: "установи громкость на 80 процентов"

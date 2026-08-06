@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ..config import Config
 from . import (
-    apps, browser, calendar, desktop_notify as desktop_notify_mod,
-    env, face, files, github, macros, memory, personal, sounds,
-    spotify, system, translator, vision, vpn, weather, web, wifi, youtube,
+    alarm, apps, browser, calendar, currency, desktop_notify as desktop_notify_mod,
+    env, face, files, github, homeassistant, macros, memory, news,
+    personal, pomodoro, sounds, spotify, system, telegram_bot,
+    translator, vision, vpn, weather, web, wifi, youtube,
 )
+from .alarm import AlarmService
 from .browser import BrowserSession
 from .memory import Memory
 from .personal import TimerService
+from .pomodoro import PomodoroService
 from .registry import Skill, SkillRegistry
 
 __all__ = [
@@ -32,11 +35,17 @@ class Services:
     timers: TimerService
     memory: Memory
     browser: BrowserSession
+    pomodoro: PomodoroService | None = None
+    alarm: AlarmService | None = None
 
     def shutdown(self) -> None:
         """Освобождает ресурсы всех служб."""
         self.timers.shutdown()
         self.browser.shutdown()
+        if self.pomodoro is not None:
+            pass  # PomodoroService timers are daemon threads
+        if self.alarm is not None:
+            self.alarm.shutdown()
 
 
 def build_registry(config: Config, notify: Callable[[str], None]) -> tuple[SkillRegistry, Services]:
@@ -78,10 +87,27 @@ def build_registry(config: Config, notify: Callable[[str], None]) -> tuple[Skill
         registry.extend(vpn.build_skills(skills_config.vpn))
     registry.extend(sounds.build_skills(skills_config.sounds))
     registry.extend(wifi.build_skills())
+    # --- Новые навыки ---
+    pomodoro_svc = None
+    if skills_config.pomodoro.enabled:
+        pomodoro_skills, pomodoro_svc = pomodoro.build_skills(skills_config.pomodoro, notify)
+        registry.extend(pomodoro_skills)
+    if skills_config.news.enabled:
+        registry.extend(news.build_skills(skills_config.news))
+    if skills_config.currency.enabled:
+        registry.extend(currency.build_skills(skills_config.currency))
+    if skills_config.homeassistant.enabled:
+        registry.extend(homeassistant.build_skills(skills_config.homeassistant))
+    if skills_config.telegram.enabled:
+        registry.extend(telegram_bot.build_skills(skills_config.telegram))
+    alarm_svc = None
+    if skills_config.alarm.enabled:
+        alarm_skills, alarm_svc = alarm.build_skills(skills_config.alarm, notify)
+        registry.extend(alarm_skills)
     # Пользовательские плагины — последними, могут переопределить встроенные.
     from .plugins import load_plugins
 
     plugin_skills = load_plugins(config)
     if plugin_skills:
         registry.extend(plugin_skills)
-    return registry, Services(timers, memory_store, browser_session)
+    return registry, Services(timers, memory_store, browser_session, pomodoro_svc, alarm_svc)
