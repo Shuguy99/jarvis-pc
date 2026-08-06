@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from ..config import Config
 from . import (
     apps, browser, calendar, desktop_notify as desktop_notify_mod,
-    env, face, files, macros, memory, personal, spotify,
-    system, translator, vision, weather, web, youtube,
+    env, face, files, github, macros, memory, personal, sounds,
+    spotify, system, translator, vision, vpn, weather, web, wifi, youtube,
 )
 from .browser import BrowserSession
 from .memory import Memory
@@ -72,6 +72,12 @@ def build_registry(config: Config, notify: Callable[[str], None]) -> tuple[Skill
         registry.extend(youtube.build_skills(skills_config.youtube))
     if skills_config.face.enabled:
         registry.extend(face.build_skills(skills_config.face))
+    if skills_config.github.enabled:
+        registry.extend(github.build_skills(skills_config.github))
+    if skills_config.vpn.enabled:
+        registry.extend(vpn.build_skills(skills_config.vpn))
+    registry.extend(sounds.build_skills(skills_config.sounds))
+    registry.extend(wifi.build_skills())
     # Пользовательские плагины — последними, могут переопределить встроенные.
     from .plugins import load_plugins
 

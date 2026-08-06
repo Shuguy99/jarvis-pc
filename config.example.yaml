@@ -116,6 +116,20 @@ skills:
     camera_index: 0
     photo_dir: "~/Pictures/Jarvis"
 
+  github:                  # GitHub API (коммиты, issues, PR)
+    enabled: true
+    token: ""             # GITHUB_TOKEN или Personal Access Token
+    default_repo: ""       # owner/repo по умолчанию
+
+  vpn:                     # WireGuard / OpenVPN (отключено по умолчанию)
+    enabled: false
+    backend: auto          # auto | wireguard | openvpn
+    default_config: ""
+
+  sounds:                  # звуковые эффекты (отключено по умолчанию)
+    enabled: false
+    sounds_dir: "~/.jarvis/sounds"
+
   aliases:                 # голосовые сокращения -> полная команда для LLM
     тихо: "установи громкость на 20 процентов"
     громко: "установи громкость на 80 процентов"

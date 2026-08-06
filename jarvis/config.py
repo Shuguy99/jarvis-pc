@@ -191,6 +191,34 @@ class CalendarConfig:
 
 
 @dataclass
+class GitHubConfig:
+    """GitHub интеграция через REST API."""
+
+    enabled: bool = True
+    token: str = ""  # GITHUB_TOKEN из окружения или прямой
+    default_repo: str = ""  # owner/repo по умолчанию
+
+
+@dataclass
+class VpnConfig:
+    """VPN: WireGuard и OpenVPN."""
+
+    enabled: bool = False
+    backend: str = "auto"  # auto | wireguard | openvpn
+    default_config: str = ""  # имя конфигурации по умолчанию
+    ovpn_dir: str = ""  # директория с .ovpn файлами
+
+
+@dataclass
+class SoundsConfig:
+    """Звуковые эффекты при событиях."""
+
+    enabled: bool = False
+    sounds_dir: str = str(Path.home() / ".jarvis" / "sounds")
+    custom_sounds: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
 class FilesConfig:
     """Файловый менеджер."""
 
@@ -238,6 +266,9 @@ class SkillsConfig:
     files: FilesConfig = field(default_factory=FilesConfig)
     youtube: YouTubeConfig = field(default_factory=YouTubeConfig)
     face: FaceConfig = field(default_factory=FaceConfig)
+    github: GitHubConfig = field(default_factory=GitHubConfig)
+    vpn: VpnConfig = field(default_factory=VpnConfig)
+    sounds: SoundsConfig = field(default_factory=SoundsConfig)
 
 
 @dataclass
