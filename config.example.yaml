@@ -175,6 +175,40 @@ skills:
   expenses:                # трекер расходов
     enabled: true
 
+  network:                 # сетевые утилиты (ping, speedtest, порты, IP, DNS)
+    enabled: true
+
+  windows:                 # менеджер окон (split screen, мониторы)
+    enabled: true
+
+  disk:                    # анализ диска (статистика, топ тяжёлых папок)
+    enabled: true
+
+  sysupdate:               # обновление системы (apt / pip)
+    enabled: true
+
+  processes:               # процесс-менеджер (топ CPU/RAM, kill)
+    enabled: true
+
+  music_recognition:       # распознавание музыки (AudD API)
+    enabled: false
+    api_key: ""          # audd.io API token
+    record_seconds: 5
+
+  qr:                      # генерация QR-кодов
+    enabled: true
+
+  image_gen:               # генерация изображений
+    enabled: false
+    backend: auto          # auto | openai | stable_diffusion
+    api_key: ""
+    api_base: ""
+    sd_url: "http://127.0.0.1:7860"
+    size: "1024x1024"
+
+  radio:                   # интернет-радио
+    enabled: true
+
   aliases:                 # голосовые сокращения -> полная команда для LLM
     тихо: "установи громкость на 20 процентов"
     громко: "установи громкость на 80 процентов"

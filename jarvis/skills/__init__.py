@@ -8,10 +8,11 @@ from dataclasses import dataclass, field
 from ..config import Config
 from . import (
     alarm, agenda, apps, browser, calendar, currency, desktop_notify as desktop_notify_mod,
-    disk, env, expenses, face, files, github, habits, homeassistant, macros,
-    memory, network, news, notes, passwords, personal, pomodoro, processes,
-    sounds, spotify, system, sysupdate, telegram_bot, translator, vision, vpn,
-    weather, web, wifi, windows_manager, youtube,
+    disk, env, expenses, face, files, github, habits, homeassistant, image_gen,
+    macros, memory, music_recognition, network, news, notes,
+    passwords, personal, pomodoro, processes, qr, radio, sounds, spotify, system,
+    sysupdate, telegram_bot, translator, vision, vpn, weather, web, wifi,
+    windows_manager, youtube,
 )
 from .alarm import AlarmService
 from .browser import BrowserSession
@@ -122,6 +123,15 @@ def build_registry(config: Config, notify: Callable[[str], None]) -> tuple[Skill
         registry.extend(sysupdate.build_skills())
     if skills_config.processes.enabled:
         registry.extend(processes.build_skills())
+    # --- Медиа ---
+    if skills_config.music_recognition.enabled:
+        registry.extend(music_recognition.build_skills(skills_config.music_recognition))
+    if skills_config.qr.enabled:
+        registry.extend(qr.build_skills())
+    if skills_config.image_gen.enabled:
+        registry.extend(image_gen.build_skills(skills_config.image_gen))
+    if skills_config.radio.enabled:
+        registry.extend(radio.build_skills())
     # Пользовательские плагины
     from .plugins import load_plugins
 

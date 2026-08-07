@@ -312,6 +312,42 @@ class ExpensesConfig:
 
 
 @dataclass
+class MusicRecognitionConfig:
+    """Распознавание музыки (AudD API)."""
+
+    enabled: bool = False
+    api_key: str = ""  # audd.io API token
+    record_seconds: int = 5
+
+
+@dataclass
+class QrConfig:
+    """QR-коды."""
+
+    enabled: bool = True
+
+
+@dataclass
+class ImageGenConfig:
+    """Генерация изображений."""
+
+    enabled: bool = False
+    backend: str = "auto"  # auto | openai | stable_diffusion
+    api_key: str = ""
+    api_base: str = ""
+    sd_url: str = "http://127.0.0.1:7860"  # Stable Diffusion WebUI
+    sd_steps: int = 20
+    size: str = "1024x1024"
+
+
+@dataclass
+class RadioConfig:
+    """Интернет-радио."""
+
+    enabled: bool = True
+
+
+@dataclass
 class NetworkConfig:
     """Сетевые утилиты."""
 
@@ -413,6 +449,10 @@ class SkillsConfig:
     disk: DiskConfig = field(default_factory=DiskConfig)
     sysupdate: SysupdateConfig = field(default_factory=SysupdateConfig)
     processes: ProcessesConfig = field(default_factory=ProcessesConfig)
+    music_recognition: MusicRecognitionConfig = field(default_factory=MusicRecognitionConfig)
+    qr: QrConfig = field(default_factory=QrConfig)
+    image_gen: ImageGenConfig = field(default_factory=ImageGenConfig)
+    radio: RadioConfig = field(default_factory=RadioConfig)
 
 
 @dataclass
