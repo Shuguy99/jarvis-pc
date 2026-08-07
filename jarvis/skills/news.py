@@ -7,7 +7,7 @@ import re
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime
 
 from ..config import NewsConfig
 from .registry import Skill, object_schema

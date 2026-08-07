@@ -333,6 +333,7 @@ class ImageGenConfig:
 
     enabled: bool = False
     backend: str = "auto"  # auto | openai | stable_diffusion
+    model: str = "dall-e-3"
     api_key: str = ""
     api_base: str = ""
     sd_url: str = "http://127.0.0.1:7860"  # Stable Diffusion WebUI
