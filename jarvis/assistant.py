@@ -48,6 +48,9 @@ class Assistant:
     def __init__(self, config: Config, sink: EventSink | None = None) -> None:
         self.config = config
         self._sink = sink or (lambda event: None)
+        # Инициализируем менеджер профилей из конфига.
+        from .skills.personality import get_manager
+        get_manager(config.brain.profile)
         self.speaker = Speaker(config.tts)
         self.skills: SkillRegistry
         self.services: Services

@@ -15,6 +15,10 @@ greeting: "Все системы в норме, сэр."
 
 # ─── Голос и речь ─────────────────────────────────────────────────
 
+# brain.profile — выбирает личность и голос: jarvis | friday | military |
+#   friendly | pirate | concise | butler | hacker
+# Можно переключать голосом: "Джарвис, включи профиль пятница"
+
 wake_word:
   enabled: true
   model: hey_jarvis                      # модель openWakeWord

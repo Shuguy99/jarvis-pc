@@ -56,8 +56,11 @@ def test_tool_call_result_returned_to_model() -> None:
     assert tool_messages[0].tool_call_id == "c1"
 
 
-def test_system_prompt_is_prepended() -> None:
+def test_system_prompt_is_prepended(tmp_path, monkeypatch) -> None:
     """Системный промпт всегда первый в запросе к модели."""
+    import jarvis.skills.personality as mod
+    monkeypatch.setattr(mod, "_PROFILES_FILE", tmp_path / "p.json")
+    mod._manager = None
     brain = ScriptedBrain(BrainConfig(), SkillRegistry(), [Message("assistant", "да")])
     brain.ask("привет")
     assert brain.seen[0][0].role == "system"

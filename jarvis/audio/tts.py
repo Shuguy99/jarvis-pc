@@ -165,8 +165,24 @@ class Speaker:
         clean = " ".join(text.split())
         if not clean:
             return
+        # Подхватываем голос и скорость из текущего профиля.
+        self._apply_profile()
         with self._lock:
             if self.config.engine == "edge" and self._speak_edge(clean):
                 return
             if not self._speak_sapi(clean):
                 log.info("TTS недоступен, ответ только текстом: %s", clean)
+
+    def _apply_profile(self) -> None:
+        """Обновляет голос и скорость из текущего профиля личности."""
+        try:
+            from ..skills.personality import get_profile_voice, get_profile_tts_rate
+            voice = get_profile_voice()
+            rate = get_profile_tts_rate()
+            if voice and voice != self.config.edge_voice:
+                self.config.edge_voice = voice
+                log.info("Голос переключён на %s", voice)
+            if rate != self.config.rate:
+                self.config.rate = rate
+        except Exception:
+            pass
