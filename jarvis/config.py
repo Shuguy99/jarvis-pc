@@ -312,6 +312,41 @@ class ExpensesConfig:
 
 
 @dataclass
+class NetworkConfig:
+    """Сетевые утилиты."""
+
+    enabled: bool = True
+
+
+@dataclass
+class WindowsConfig:
+    """Менеджер окон."""
+
+    enabled: bool = True
+
+
+@dataclass
+class DiskConfig:
+    """Анализ диска."""
+
+    enabled: bool = True
+
+
+@dataclass
+class SysupdateConfig:
+    """Обновление системы."""
+
+    enabled: bool = True
+
+
+@dataclass
+class ProcessesConfig:
+    """Процесс-менеджер."""
+
+    enabled: bool = True
+
+
+@dataclass
 class FilesConfig:
     """Файловый менеджер."""
 
@@ -373,6 +408,11 @@ class SkillsConfig:
     agenda: AgendaConfig = field(default_factory=AgendaConfig)
     habits: HabitsConfig = field(default_factory=HabitsConfig)
     expenses: ExpensesConfig = field(default_factory=ExpensesConfig)
+    network: NetworkConfig = field(default_factory=NetworkConfig)
+    windows: WindowsConfig = field(default_factory=WindowsConfig)
+    disk: DiskConfig = field(default_factory=DiskConfig)
+    sysupdate: SysupdateConfig = field(default_factory=SysupdateConfig)
+    processes: ProcessesConfig = field(default_factory=ProcessesConfig)
 
 
 @dataclass

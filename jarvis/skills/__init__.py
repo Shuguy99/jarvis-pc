@@ -8,9 +8,10 @@ from dataclasses import dataclass, field
 from ..config import Config
 from . import (
     alarm, agenda, apps, browser, calendar, currency, desktop_notify as desktop_notify_mod,
-    env, expenses, face, files, github, habits, homeassistant, macros,
-    memory, news, notes, passwords, personal, pomodoro, sounds,
-    spotify, system, telegram_bot, translator, vision, vpn, weather, web, wifi, youtube,
+    disk, env, expenses, face, files, github, habits, homeassistant, macros,
+    memory, network, news, notes, passwords, personal, pomodoro, processes,
+    sounds, spotify, system, sysupdate, telegram_bot, translator, vision, vpn,
+    weather, web, wifi, windows_manager, youtube,
 )
 from .alarm import AlarmService
 from .browser import BrowserSession
@@ -110,6 +111,17 @@ def build_registry(config: Config, notify: Callable[[str], None]) -> tuple[Skill
         registry.extend(habits.build_skills(skills_config.habits)[0])
     if skills_config.expenses.enabled:
         registry.extend(expenses.build_skills(skills_config.expenses)[0])
+    # --- Система и сеть ---
+    if skills_config.network.enabled:
+        registry.extend(network.build_skills())
+    if skills_config.windows.enabled:
+        registry.extend(windows_manager.build_skills())
+    if skills_config.disk.enabled:
+        registry.extend(disk.build_skills())
+    if skills_config.sysupdate.enabled:
+        registry.extend(sysupdate.build_skills())
+    if skills_config.processes.enabled:
+        registry.extend(processes.build_skills())
     # Пользовательские плагины
     from .plugins import load_plugins
 
