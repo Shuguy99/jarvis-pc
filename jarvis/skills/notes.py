@@ -51,7 +51,7 @@ class TaggedNotes:
             return "Пустая заметка не сохраняется, сэр."
         tags, clean = self._parse_tags(text)
         note = {
-            "id": len(self._notes) + 1,
+            "id": max((n["id"] for n in self._notes), default=0) + 1,
             "text": clean,
             "tags": tags,
             "created": dt.datetime.now().isoformat(timespec="minutes"),

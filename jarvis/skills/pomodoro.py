@@ -108,7 +108,6 @@ class PomodoroService:
             timer.start()
             self._session = _Session(kind=kind, timer=timer, due=due, duration_min=duration_min)
 
-        kind_ru = {"work": "рабочая", "break": "перерыв", "long_break": "длинный перерыв"}
         return f"{label} на {duration_min} мин запущен, сэр."
 
     def status(self) -> str:

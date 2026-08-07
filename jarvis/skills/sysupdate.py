@@ -96,7 +96,7 @@ def pip_update(package: str = "") -> str:
     lines = [l for l in result.stdout.strip().split("\n")[2:] if l]
     if not lines:
         return "Все Python-пакеты актуальны, сэр."
-    outdated = [l.split()[0] for l in lines[:20]]
+    outdated = [l.strip().split()[0] for l in lines[:20] if l.strip()]
     return f"Устаревшие пакеты: {', '.join(outdated)}, сэр."
 
 

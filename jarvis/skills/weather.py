@@ -117,7 +117,6 @@ def _get_forecast_owm(location: str, api_key: str) -> str:
     if not items:
         return "Прогноз пуст, сэр."
     # Группируем по дням, берём середину дня (12:00-15:00)
-    from datetime import datetime
     daily: dict[str, dict] = {}
     for item in items:
         dt_txt = item.get("dt_txt", "")
@@ -129,7 +128,8 @@ def _get_forecast_owm(location: str, api_key: str) -> str:
         hour = dt.hour
         if hour < 6 or hour >= 21:
             continue  # пропускаем ночь
-        if day_key not in daily:
+        if day_key not in daily or abs(hour - 12) < abs(daily[day_key].get("_hour", 99) - 12):
+            item["_hour"] = hour
             daily[day_key] = item
     lines = [f"Прогноз для {location}:"]
     for day_key, item in list(daily.items())[:3]:

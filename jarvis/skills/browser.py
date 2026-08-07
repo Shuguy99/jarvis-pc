@@ -192,7 +192,11 @@ class BrowserSession:
                 self.close()
             except Exception:
                 log.exception("Не удалось закрыть браузер при shutdown")
-        self._pool.shutdown(wait=False, cancel_futures=True)
+        import sys
+        kwargs: dict = {"wait": False}
+        if sys.version_info >= (3, 9):
+            kwargs["cancel_futures"] = True
+        self._pool.shutdown(**kwargs)
 
 
 def build_skills(config: BrowserConfig) -> tuple[list[Skill], BrowserSession]:

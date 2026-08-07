@@ -56,7 +56,7 @@ def _move_window_linux(x: int, y: int, w: int, h: int) -> str:
     """Перемещает и ресайзит окно через xdotool + wmctrl."""
     win_id = _get_active_window_id()
     if not win_id:
-        return "xdotool не найден, сэр."
+        return "Не удалось определить активное окно, сэр."
     try:
         subprocess.run(
             ["xdotool", "windowmove", "--sync", win_id, str(x), str(y)],
@@ -112,8 +112,8 @@ def snap_right() -> str:
 def maximize() -> str:
     """Развернуть окно на весь экран."""
     if IS_LINUX and shutil.which("xdotool"):
-        subprocess.run(["xdotool", "windowactivate", "--sync", "getactivewindow"], check=False, timeout=3)
-        subprocess.run(["xdotool", "keydown", "super", "keyup", "Up"], check=False, timeout=3)
+        subprocess.run(["xdotool", "getactivewindow", "windowactivate", "--sync"], check=False, timeout=3)
+        subprocess.run(["xdotool", "key", "super+Up"], check=False, timeout=3)
         # Fallback через wmctrl
         if shutil.which("wmctrl"):
             subprocess.run(["wmctrl", "-r", ":ACTIVE:", "-b", "add,maximized_vert,maximized_horz"], check=False, timeout=3)
@@ -135,7 +135,7 @@ def maximize() -> str:
 def minimize() -> str:
     """Свернуть окно."""
     if IS_LINUX and shutil.which("xdotool"):
-        subprocess.run(["xdotool", "windowminimize", "getactivewindow"], check=False, timeout=3)
+        subprocess.run(["xdotool", "getactivewindow", "windowminimize"], check=False, timeout=3)
         return "Окно свёрнуто, сэр."
     if IS_WINDOWS:
         try:

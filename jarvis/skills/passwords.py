@@ -49,7 +49,12 @@ class Vault:
             self._load()
 
     def _load(self) -> None:
-        raw = json.loads(self._path.read_text("utf-8"))
+        try:
+            raw = json.loads(self._path.read_text("utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            log.warning("Файл хранилища повреждён: %s", exc)
+            self._entries = {}
+            return
         self._salt = base64.b64decode(raw["salt"])
         self._entries = {}
         if raw.get("data"):
@@ -64,11 +69,9 @@ class Vault:
         payload = {
             "salt": base64.b64encode(self._salt).decode("ascii"),
         }
-        if self._unlocked and self._entries:
+        if self._unlocked:
             plaintext = json.dumps(self._entries, ensure_ascii=False).encode("utf-8")
             payload["data"] = base64.b64encode(plaintext).decode("ascii")
-        else:
-            payload["entries"] = self._entries  # fallback
         self._path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), "utf-8")
 
     def unlock(self, master: str) -> str:
@@ -110,7 +113,8 @@ class Vault:
             password = "".join(secrets.choice(alphabet) for _ in range(16))
         self._entries[service] = {"login": login, "password": password, "notes": notes}
         self._save()
-        return f"Сохранено: {service}. Пароль: {password}, сэр."
+        masked = password[:3] + "****" + password[-3:] if len(password) > 6 else "****"
+        return f"Сохранено: {service}. Пароль: {masked}, сэр."
 
     def get(self, service: str) -> str:
         """Получает пароль для сервиса."""
@@ -130,7 +134,9 @@ class Vault:
         parts = [f"{service}:"]
         if entry.get("login"):
             parts.append(f"  Логин: {entry['login']}")
-        parts.append(f"  Пароль: {entry['password']}")
+        pw = entry['password']
+        masked = pw[:3] + "****" + pw[-3:] if len(pw) > 6 else "****"
+        parts.append(f"  Пароль: {masked}")
         if entry.get("notes"):
             parts.append(f"  Заметка: {entry['notes']}")
         return "\n".join(parts)

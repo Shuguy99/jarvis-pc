@@ -62,22 +62,23 @@ def tg_send_photo(config: TelegramConfig, photo_path: str, caption: str = "") ->
     with open(p, "rb") as f:
         file_data = f.read()
     filename = p.name
-    body = (
-        f"--{boundary}\r\n"
-        f'Content-Disposition: form-data; name="chat_id"\r\n\r\n'
-        f"{config.chat_id}\r\n"
-        f"--{boundary}\r\n"
-        f'Content-Disposition: form-data; name="photo"; filename="{filename}"\r\n'
-        f"Content-Type: application/octet-stream\r\n\r\n"
-    ).encode("utf-8") + file_data + f"\r\n--{boundary}--\r\n".encode("utf-8")
+    body_parts = [
+        f"--{boundary}\r\n",
+        f'Content-Disposition: form-data; name="chat_id"\r\n\r\n',
+        f"{config.chat_id}\r\n",
+        f"--{boundary}\r\n",
+        f'Content-Disposition: form-data; name="photo"; filename="{filename}"\r\n',
+        f"Content-Type: application/octet-stream\r\n\r\n",
+    ]
+    body = b""
+    for part in body_parts:
+        body += part.encode("utf-8")
+    body += file_data
     if caption:
-        # Вставляем caption перед финальным boundary
-        body = (
-            body.rstrip(f"--{boundary}--\r\n".encode("utf-8"))
-            + f'Content-Disposition: form-data; name="caption"\r\n\r\n'.encode("utf-8")
-            + caption.encode("utf-8")
-            + f"\r\n--{boundary}--\r\n".encode("utf-8")
-        )
+        body += f"\r\n--{boundary}\r\n".encode("utf-8")
+        body += f'Content-Disposition: form-data; name="caption"\r\n\r\n'.encode("utf-8")
+        body += caption.encode("utf-8")
+    body += f"\r\n--{boundary}--\r\n".encode("utf-8")
     url = _API.format(token=config.bot_token) + "/sendPhoto"
     req = urllib.request.Request(
         url, data=body,

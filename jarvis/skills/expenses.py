@@ -89,7 +89,7 @@ class ExpenseTracker:
         lines.append("")
         for cat, amount in sorted(cats.items(), key=lambda x: -x[1]):
             pct = amount / total * 100
-            bar_len = int(pct / 5)
+            bar_len = min(int(pct / 5), 20)
             bar = "█" * bar_len + "░" * (20 - bar_len)
             lines.append(f"  {cat:<15} {amount:>8.0f} руб. {bar} {pct:.0f}%")
 

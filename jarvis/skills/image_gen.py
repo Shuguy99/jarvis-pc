@@ -50,7 +50,7 @@ def _generate_stable_diffusion(prompt: str, config: ImageGenConfig) -> str:
     payload = json.dumps({
         "prompt": prompt,
         "steps": config.sd_steps,
-        "width": 512, "height": 512,
+        "width": int(config.size.split("x")[0]), "height": int(config.size.split("x")[1]),
     }).encode("utf-8")
     req = urllib.request.Request(
         f"{api_url}/sdapi/v1/txt2img",
@@ -103,7 +103,10 @@ def generate(config: ImageGenConfig, prompt: str) -> str:
         return _generate_stable_diffusion(prompt, config)
     # Auto: пробуем SD если доступен, иначе OpenAI
     if config.sd_url:
-        return _generate_stable_diffusion(prompt, config)
+        result = _generate_stable_diffusion(prompt, config)
+        if not result.startswith("Ошибка"):
+            return result
+        log.info("SD недоступен, пробуем OpenAI")
     return _generate_openai(prompt, config)
 
 

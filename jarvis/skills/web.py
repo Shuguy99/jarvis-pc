@@ -127,7 +127,7 @@ def web_search(config: SkillsConfig, query: str) -> str:
     global _last_search_url  # noqa: PLW0603
     if not query.strip():
         return "Что искать, сэр?"
-    _last_search_url = config.search_engine.format(query=urllib.parse.quote(query))
+    _last_search_url = config.search_engine.replace("{query}", urllib.parse.quote(query))
     results = _fetch_ddg_results(query)
     if not results:
         # Fallback: открываем браузер как раньше.

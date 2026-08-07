@@ -9,9 +9,12 @@ import logging
 import platform
 from typing import Any
 
-import requests
-
 from ..config import Config, VisionConfig
+
+try:
+    import requests
+except ImportError:
+    requests = None  # type: ignore[assignment, misc]
 from .personal import write_clipboard
 from .registry import Skill, object_schema
 
@@ -143,6 +146,8 @@ def _ask_ollama(config: Config, png: bytes, question: str) -> str:
         "stream": False,
         "options": {"temperature": config.brain.temperature},
     }
+    if requests is None:
+        raise VisionError("Модуль requests не установлен. Установите: pip install requests, сэр.")
     url = config.brain.ollama_host.rstrip("/") + "/api/chat"
     try:
         response = requests.post(url, json=payload, timeout=REQUEST_TIMEOUT_S)

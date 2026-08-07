@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 
 IS_WINDOWS = platform.system() == "Windows"
 IS_MACOS = platform.system() == "Darwin"
-IS_LINUX = not IS_WINDOWS and not IS_MACOS
+IS_LINUX = platform.system() == "Linux"
 
 
 def _notify_plyer(title: str, message: str) -> bool:
@@ -33,8 +33,8 @@ def _notify_windows(title: str, message: str) -> bool:
     """Windows toast через PowerShell (Windows 10+)."""
     if not IS_WINDOWS:
         return False
-    safe_title = title.replace("'", "''")
-    safe_msg = message.replace("'", "''")
+    safe_title = title.replace("'", "''").replace(")", "")
+    safe_msg = message.replace("'", "''").replace(")", "")
     ps_script = (
         "[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, "
         "ContentType = WindowsRuntime] > $null; "
@@ -84,8 +84,8 @@ def _notify_macos(title: str, message: str) -> bool:
     """macOS уведомление через osascript."""
     if not IS_MACOS:
         return False
-    safe_title = title.replace('"', '\\"')
-    safe_msg = message.replace('"', '\\"')
+    safe_title = title.replace('\\', '\\\\').replace('"', '\\"')
+    safe_msg = message.replace('\\', '\\\\').replace('"', '\\"')
     try:
         subprocess.run(
             ["osascript", "-e", f'display notification "{safe_msg}" with title "{safe_title}"'],

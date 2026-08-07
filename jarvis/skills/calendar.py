@@ -18,7 +18,7 @@ _DT_RE = re.compile(r"^DTSTART[^:]*:(.+)$", re.MULTILINE | re.IGNORECASE)
 _SUMMARY_RE = re.compile(r"^SUMMARY:(.+)$", re.MULTILINE | re.IGNORECASE)
 _LOCATION_RE = re.compile(r"^LOCATION:(.+)$", re.MULTILINE | re.IGNORECASE)
 _DESCRIPTION_RE = re.compile(r"^DESCRIPTION:(.+)$", re.MULTILINE | re.IGNORECASE)
-_VEVENT_RE = re.compile(r"BEGIN:VEVENT\n(.*?)\nEND:VEVENT", re.DOTALL | re.IGNORECASE)
+_VEVENT_RE = re.compile(r"BEGIN:VEVENT\r?\n(.*?)\r?\nEND:VEVENT", re.DOTALL | re.IGNORECASE)
 
 
 def _parse_ics_datetime(dt_str: str) -> datetime | None:
@@ -40,6 +40,7 @@ def _parse_ics_datetime(dt_str: str) -> datetime | None:
 
 def _parse_ics_events(ics_text: str) -> list[dict]:
     """Парсит события из ICS текста. Возвращает список словарей."""
+    ics_text = ics_text.replace('\r\n', '\n').replace('\r', '\n')
     events = []
     for match in _VEVENT_RE.finditer(ics_text):
         block = match.group(1)
@@ -111,9 +112,11 @@ def today_events(config: CalendarConfig) -> str:
         if ev["location"]:
             line += f", {ev['location']}"
         lines.append(line)
-    if len(lines) > 6:
+    if len(today_events_list) > 5:
         lines = lines[:6]
-        lines.append(f"... и ещё {len(today_events_list) - 5} событий.")
+        rest = len(today_events_list) - 5
+        word = "событие" if rest == 1 else "события" if 2 <= rest <= 4 else "событий"
+        lines.append(f"... и ещё {rest} {word}.")
     return "\n".join(lines)
 
 
@@ -152,13 +155,15 @@ def add_event(config: CalendarConfig, summary: str, day: str = "", time_str: str
 
     # Формируем ICS
     dt_str = dt.strftime("%Y%m%dT%H%M%S")
+    end_dt = dt + timedelta(hours=1)
+    end_str = end_dt.strftime("%Y%m%dT%H%M%S")
     ics_content = (
         "BEGIN:VCALENDAR\n"
         "VERSION:2.0\n"
         "PRODID:-//Jarvis//Calendar//RU\n"
         "BEGIN:VEVENT\n"
         f"DTSTART:{dt_str}\n"
-        f"DTEND:{dt_str}\n"
+        f"DTEND:{end_str}\n"
         f"SUMMARY:{summary}\n"
     )
     if location:

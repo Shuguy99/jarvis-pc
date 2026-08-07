@@ -61,23 +61,28 @@ def vpn_up(config: VpnConfig, name: str = "") -> str:
         return "Укажите имя конфигурации или настройте default_config, сэр."
     # WireGuard
     if config.backend in ("wireguard", "auto") and _wg_available():
-        conf_path = f"/etc/wireguard/{conf}.conf"
-        result = subprocess.run(
-            ["sudo", "wg-quick", "up", conf],
-            capture_output=True, text=True, check=False, timeout=15,
-        )
-        if result.returncode == 0:
-            return f"WireGuard {conf} включён, сэр."
-        return f"Ошибка WireGuard: {result.stderr.strip() or result.stdout.strip()[:100]}, сэр."
+        try:
+            result = subprocess.run(
+                ["sudo", "wg-quick", "up", conf],
+                capture_output=True, text=True, check=False, timeout=15,
+            )
+            if result.returncode == 0:
+                return f"WireGuard {conf} включён, сэр."
+            return f"Ошибка WireGuard: {result.stderr.strip() or result.stdout.strip()[:100]}, сэр."
+        except Exception as exc:
+            return f"Ошибка WireGuard: {exc}, сэр."
     # OpenVPN
     if config.backend in ("openvpn", "auto") and _ovpn_available():
-        result = subprocess.run(
-            ["sudo", "openvpn", "--config", conf],
-            capture_output=True, text=True, check=False, timeout=15,
-        )
-        if result.returncode == 0:
-            return f"OpenVPN {conf} включён, сэр."
-        return f"Ошибка OpenVPN: {result.stderr.strip()[:100]}, сэр."
+        try:
+            result = subprocess.run(
+                ["sudo", "openvpn", "--config", conf, "--daemon"],
+                capture_output=True, text=True, check=False, timeout=15,
+            )
+            if result.returncode == 0:
+                return f"OpenVPN {conf} включён, сэр."
+            return f"Ошибка OpenVPN: {result.stderr.strip()[:100]}, сэр."
+        except Exception as exc:
+            return f"Ошибка OpenVPN: {exc}, сэр."
     return "WireGuard или OpenVPN не установлены, сэр."
 
 
@@ -95,8 +100,10 @@ def vpn_down(config: VpnConfig, name: str = "") -> str:
             return f"WireGuard {conf} отключён, сэр."
         return f"Ошибка: {result.stderr.strip()[:100]}, сэр."
     if config.backend in ("openvpn", "auto") and _ovpn_available():
-        subprocess.run(["sudo", "killall", "openvpn"], check=False, timeout=5)
-        return "OpenVPN отключён, сэр."
+        result = subprocess.run(["sudo", "killall", "openvpn"], check=False, timeout=5, capture_output=True, text=True)
+        if result.returncode == 0:
+            return "OpenVPN отключён, сэр."
+        return f"OpenVPN не был запущен или ошибка: {result.stderr.strip()[:80]}, сэр."
     return "VPN не настроен, сэр."
 
 

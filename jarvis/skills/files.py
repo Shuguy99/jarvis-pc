@@ -88,7 +88,7 @@ def copy_file(config: FilesConfig, source: str, destination: str) -> str:
     try:
         if src.is_dir():
             dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(str(src), str(dst))
+            shutil.copytree(str(src), str(dst), dirs_exist_ok=True)
         else:
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(str(src), str(dst))
@@ -145,7 +145,10 @@ def file_info(config: FilesConfig, path: str) -> str:
     if target.is_file():
         size = _human_size(stat.st_size)
     else:
-        size = f"{len(list(target.iterdir()))} элементов"
+        try:
+            size = f"{len(list(target.iterdir()))} элементов"
+        except PermissionError:
+            size = "нет доступа к содержимому"
     mtime = datetime.fromtimestamp(stat.st_mtime).strftime("%d.%m.%Y %H:%M")
     ext = target.suffix or "нет расширения"
     return f"{target.name}: {kind}, размер {size}, изменён {mtime}, расширение {ext}."

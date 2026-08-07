@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any
@@ -42,7 +43,10 @@ def _parse_repo(repo_input: str) -> str:
     if "github.com/" in repo_input:
         parts = repo_input.split("github.com/")[1].split("/")
         repo_input = "/".join(parts[:2])
-    return repo_input.rstrip("/")
+    repo_input = repo_input.rstrip("/")
+    if repo_input.endswith(".git"):
+        repo_input = repo_input[:-4]
+    return repo_input
 
 
 def repo_status(config: GitHubConfig, repo: str = "") -> str:

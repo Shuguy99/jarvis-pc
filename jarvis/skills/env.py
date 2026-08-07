@@ -63,9 +63,8 @@ def get_path() -> str:
     return "\n".join(lines)
 
 
-def build_skills() -> list:
+def build_skills() -> list[Skill]:
     """Создаёт навыки для работы с переменными окружения."""
-    from .registry import Skill
     return [
         Skill(
             name="get_env",

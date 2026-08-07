@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -11,11 +12,11 @@ log = logging.getLogger(__name__)
 
 
 def _qr_available() -> bool:
-    return subprocess.run(["which", "qrencode"], capture_output=True).returncode == 0
+    return bool(shutil.which("qrencode"))
 
 
 def _zbar_available() -> bool:
-    return subprocess.run(["which", "zbarimg"], capture_output=True).returncode == 0
+    return bool(shutil.which("zbarimg"))
 
 
 def generate_qr(text: str, output_path: str = "") -> str:

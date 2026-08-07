@@ -272,7 +272,10 @@ def power_action(config: SkillsConfig, action: str, delay_s: int = 20) -> str:
     command = commands.get(action)
     if command is None:
         return f"Неизвестное действие питания: {action}."
-    subprocess.run(command, check=False)
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        err = result.stderr.strip()[:100] if result.stderr else ""
+        return f"Не удалось выполнить {action}: {err or 'недостаточно прав'}, сэр."
     if action == "cancel":
         return "Запланированное выключение отменено."
     if IS_WINDOWS:

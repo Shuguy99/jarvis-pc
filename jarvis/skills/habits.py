@@ -57,7 +57,7 @@ class HabitTracker:
         today = self._today()
         self._habits[name].setdefault("log", {})[today] = True
         self._save()
-        return f"{name} — отмечено! , сэр."
+        return f"{name} — отмечено, сэр."
 
     def uncheck(self, name: str) -> str:
         """Снимает отметку за сегодня."""

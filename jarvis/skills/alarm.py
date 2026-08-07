@@ -35,7 +35,6 @@ class AlarmService:
         self._alarms: dict[str, _Alarm] = {}
         self._counter = 0
         self._lock = threading.Lock()
-        self._snooze_sec = config.snooze_min * 60
 
     def _parse_days(self, days_str: str) -> list[int]:
         """Парсит строки дней: 'пн,ср,пт' или 'будни' или 'каждый день'."""
