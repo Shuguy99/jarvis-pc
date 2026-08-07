@@ -19,6 +19,7 @@ class TestPowerActionLinux:
     @patch("jarvis.skills.system.IS_WINDOWS", False)
     @patch("jarvis.skills.system.subprocess.run")
     def test_linux_uses_minutes(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stderr="")
         config = SkillsConfig(allow_shutdown=True)
         result = power_action(config, "shutdown", delay_s=120)
         cmd = mock_run.call_args[0][0]
