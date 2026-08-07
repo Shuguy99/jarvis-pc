@@ -1,10 +1,19 @@
-"""Конфигурация Джарвиса: загрузка YAML + переменных окружения."""
+"""Конфигурация Джарвиса: загрузка YAML + переменные окружения.
+
+Особенности:
+- Пути с ~ автоматически разворачиваются (expanduser)
+- Неизвестные ключи в YAML логгятся как предупреждения
+- Поддержка переменных окружения: ${VAR} подставляется из os.environ
+- ``python -m jarvis config init`` создаёт config.yaml из шаблона
+"""
 
 from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Mapping
+import re
+import shutil
+from collections.abc import Mapping, Sequence
 from dataclasses import MISSING, dataclass, field, fields, is_dataclass
 from pathlib import Path
 from typing import Any, TypeVar, get_type_hints
@@ -20,16 +29,25 @@ DEFAULT_CONFIG_PATHS = (
 
 T = TypeVar("T")
 
+# Поля-пути: имена, оканчивающиеся на эти суффиксы, авто-раскрывают ~.
+_PATH_SUFFIXES = ("_dir", "_file", "_path", "_db", "_cmd", "cache_path", "path")
+# Поля-URL: не трогаем expanduser.
+_URL_FIELDS = {"url", "api_base", "ollama_host", "openai_base_url", "sd_url", "redirect_uri", "search_engine"}
+
+# Паттерн ${ENV_VAR} — подстановка переменных окружения.
+_ENV_RE = re.compile(r"\$\{([^}]+)\}")
+
+
+# ── Dataclass-ы конфигурации ─────────────────────────────────────────
+
 
 @dataclass
 class WakeWordConfig:
     """Настройки пробуждения по ключевому слову."""
 
     enabled: bool = True
-    # Модель openWakeWord: "hey_jarvis" поставляется предобученной.
     model: str = "hey_jarvis"
     threshold: float = 0.5
-    # Резервный режим: если openWakeWord недоступен, ищем эти слова в тексте.
     fallback_phrases: list[str] = field(default_factory=lambda: ["джарвис", "jarvis", "джарвиc"])
 
 
@@ -37,10 +55,10 @@ class WakeWordConfig:
 class SttConfig:
     """Настройки распознавания речи (faster-whisper)."""
 
-    model: str = "small"
+    model: str = "small"           # tiny | base | small | medium | large-v3
     language: str = "ru"
-    device: str = "auto"
-    compute_type: str = "int8"
+    device: str = "auto"           # auto | cpu | cuda
+    compute_type: str = "int8"     # int8 для CPU, float16 для GPU
     beam_size: int = 1
 
 
@@ -48,9 +66,8 @@ class SttConfig:
 class TtsConfig:
     """Настройки синтеза речи."""
 
-    # sapi5 - офлайн голос Windows; edge - облачный neural-голос Microsoft.
-    engine: str = "sapi5"
-    voice: str = ""
+    engine: str = "sapi5"          # sapi5 (офлайн, Windows) | edge (neural, нужен интернет)
+    voice: str = ""                # часть имени голоса SAPI, например "Irina"
     edge_voice: str = "ru-RU-DmitryNeural"
     rate: int = 190
     volume: float = 1.0
@@ -60,7 +77,7 @@ class TtsConfig:
 class MicConfig:
     """Настройки микрофона и детектора речи."""
 
-    device: int | None = None
+    device: int | None = None       # индекс из `python -m jarvis devices`
     sample_rate: int = 16000
     frame_ms: int = 30
     vad_aggressiveness: int = 2
@@ -73,10 +90,9 @@ class MicConfig:
 class BrainConfig:
     """Выбор и параметры LLM-бэкенда."""
 
-    # openai | ollama | offline
-    backend: str = "ollama"
+    backend: str = "ollama"         # ollama | openai | offline
     openai_model: str = "gpt-4o-mini"
-    openai_base_url: str = ""
+    openai_base_url: str = ""      # для совместимых API (OpenRouter и т.п.)
     ollama_model: str = "qwen2.5:7b-instruct"
     ollama_host: str = "http://127.0.0.1:11434"
     temperature: float = 0.4
@@ -99,7 +115,7 @@ class UiConfig:
     enabled: bool = True
     opacity: float = 0.85
     accent: str = "#3fd0ff"
-    corner: str = "bottom-right"
+    corner: str = "bottom-right"   # top-left | top-right | bottom-left | bottom-right
     width: int = 380
     height: int = 220
 
@@ -110,14 +126,12 @@ class MonitorConfig:
 
     enabled: bool = True
     interval_s: float = 60.0
-    # Ассистент сообщает о проблеме не чаще, чем раз в этот период.
     repeat_after_s: float = 900.0
     battery_low: int = 20
     battery_critical: int = 10
     memory_high: int = 90
     disk_high: int = 92
     cpu_high: int = 95
-    # Сколько подряд замеров CPU должны превысить порог, чтобы это был не всплеск.
     cpu_samples: int = 3
 
 
@@ -126,14 +140,11 @@ class VisionConfig:
     """«Зрение»: OCR и анализ экрана мультимодальной моделью."""
 
     enabled: bool = True
-    # auto повторяет brain.backend; иначе ollama | openai
-    backend: str = "auto"
+    backend: str = "auto"           # auto (как brain.backend) | ollama | openai
     ollama_model: str = "llava:7b"
     openai_model: str = "gpt-4o-mini"
-    # Языки Tesseract, например "rus+eng".
     ocr_languages: str = "rus+eng"
-    # Путь к tesseract.exe, если он не в PATH.
-    tesseract_cmd: str = ""
+    tesseract_cmd: str = ""         # путь к tesseract.exe, если не в PATH
     max_side_px: int = 1600
 
 
@@ -142,9 +153,8 @@ class MemoryConfig:
     """Долговременная память с семантическим поиском."""
 
     enabled: bool = True
-    # auto: ChromaDB, если установлена, иначе локальный JSON-индекс.
-    backend: str = "auto"
-    path: str = str(Path.home() / ".jarvis" / "memory")
+    backend: str = "auto"           # auto | chroma | json
+    path: str = "~/.jarvis/memory"
     top_k: int = 3
 
 
@@ -153,10 +163,9 @@ class BrowserConfig:
     """Автоматизация браузера через Playwright."""
 
     enabled: bool = True
-    engine: str = "chromium"
+    engine: str = "chromium"        # chromium | firefox | webkit
     headless: bool = False
-    # Профиль сохраняется, поэтому логины переживают перезапуск.
-    user_data_dir: str = str(Path.home() / ".jarvis" / "browser")
+    user_data_dir: str = "~/.jarvis/browser"
     timeout_ms: int = 15000
     max_text_chars: int = 2000
 
@@ -165,11 +174,9 @@ class BrowserConfig:
 class SpotifyConfig:
     """Управление Spotify через Web API (spotipy)."""
 
-    enabled: bool = False
-    # Ключи берём из окружения: SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET.
+    enabled: bool = False           # нужно SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET
     redirect_uri: str = "http://127.0.0.1:8888/callback"
-    cache_path: str = str(Path.home() / ".jarvis" / "spotify.json")
-    # Запускать приложение Spotify, если нет активного устройства.
+    cache_path: str = "~/.jarvis/spotify.json"
     launch_app: bool = True
 
 
@@ -179,7 +186,7 @@ class WeatherConfig:
 
     enabled: bool = True
     default_city: str = "Москва"
-    api_key: str = ""  # OpenWeatherMap API ключ (необязательно)
+    api_key: str = ""               # OpenWeatherMap API ключ (необязательно)
 
 
 @dataclass
@@ -187,7 +194,7 @@ class CalendarConfig:
     """Настройки локального календаря через ICS файлы."""
 
     enabled: bool = True
-    ics_dir: str = str(Path.home() / ".jarvis" / "calendar")
+    ics_dir: str = "~/.jarvis/calendar"
 
 
 @dataclass
@@ -195,8 +202,8 @@ class GitHubConfig:
     """GitHub интеграция через REST API."""
 
     enabled: bool = True
-    token: str = ""  # GITHUB_TOKEN из окружения или прямой
-    default_repo: str = ""  # owner/repo по умолчанию
+    token: str = ""                 # GITHUB_TOKEN из окружения или прямой
+    default_repo: str = ""          # owner/repo по умолчанию
 
 
 @dataclass
@@ -204,9 +211,9 @@ class VpnConfig:
     """VPN: WireGuard и OpenVPN."""
 
     enabled: bool = False
-    backend: str = "auto"  # auto | wireguard | openvpn
-    default_config: str = ""  # имя конфигурации по умолчанию
-    ovpn_dir: str = ""  # директория с .ovpn файлами
+    backend: str = "auto"           # auto | wireguard | openvpn
+    default_config: str = ""
+    ovpn_dir: str = ""
 
 
 @dataclass
@@ -214,7 +221,7 @@ class SoundsConfig:
     """Звуковые эффекты при событиях."""
 
     enabled: bool = False
-    sounds_dir: str = str(Path.home() / ".jarvis" / "sounds")
+    sounds_dir: str = "~/.jarvis/sounds"
     custom_sounds: dict[str, str] = field(default_factory=dict)
 
 
@@ -226,7 +233,7 @@ class PomodoroConfig:
     work_min: int = 25
     break_min: int = 5
     long_break_min: int = 15
-    stats_file: str = str(Path.home() / ".jarvis" / "pomodoro_stats.json")
+    stats_file: str = "~/.jarvis/pomodoro_stats.json"
 
 
 @dataclass
@@ -250,7 +257,7 @@ class HomeAssistantConfig:
 
     enabled: bool = False
     url: str = "http://homeassistant.local:8123"
-    token: str = ""  # Long-lived access token
+    token: str = ""                 # Long-lived access token
 
 
 @dataclass
@@ -258,8 +265,8 @@ class TelegramConfig:
     """Telegram бот."""
 
     enabled: bool = False
-    bot_token: str = ""  # от @BotFather
-    chat_id: str = ""  # ID чата или группы
+    bot_token: str = ""              # от @BotFather
+    chat_id: str = ""                # ID чата или группы
 
 
 @dataclass
@@ -275,7 +282,7 @@ class PasswordsConfig:
     """Менеджер паролей."""
 
     enabled: bool = False
-    vault_file: str = str(Path.home() / ".jarvis" / "vault.json")
+    vault_file: str = "~/.jarvis/vault.json"
 
 
 @dataclass
@@ -283,7 +290,7 @@ class NotesConfig:
     """Заметки с тегами."""
 
     enabled: bool = True
-    notes_db: str = str(Path.home() / ".jarvis" / "tagged_notes.json")
+    notes_db: str = "~/.jarvis/tagged_notes.json"
 
 
 @dataclass
@@ -291,8 +298,8 @@ class AgendaConfig:
     """Ежедневник."""
 
     enabled: bool = True
-    ics_dir: str = str(Path.home() / ".jarvis" / "calendar")
-    notes_file: str = str(Path.home() / ".jarvis" / "notes.md")
+    ics_dir: str = "~/.jarvis/calendar"
+    notes_file: str = "~/.jarvis/notes.md"
 
 
 @dataclass
@@ -300,7 +307,7 @@ class HabitsConfig:
     """Трекер привычек."""
 
     enabled: bool = True
-    habits_file: str = str(Path.home() / ".jarvis" / "habits.json")
+    habits_file: str = "~/.jarvis/habits.json"
 
 
 @dataclass
@@ -308,7 +315,7 @@ class ExpensesConfig:
     """Трекер расходов."""
 
     enabled: bool = True
-    expenses_file: str = str(Path.home() / ".jarvis" / "expenses.json")
+    expenses_file: str = "~/.jarvis/expenses.json"
 
 
 @dataclass
@@ -316,7 +323,7 @@ class MusicRecognitionConfig:
     """Распознавание музыки (AudD API)."""
 
     enabled: bool = False
-    api_key: str = ""  # audd.io API token
+    api_key: str = ""               # audd.io API token
     record_seconds: int = 5
 
 
@@ -332,11 +339,11 @@ class ImageGenConfig:
     """Генерация изображений."""
 
     enabled: bool = False
-    backend: str = "auto"  # auto | openai | stable_diffusion
+    backend: str = "auto"           # auto | openai | stable_diffusion
     model: str = "dall-e-3"
     api_key: str = ""
     api_base: str = ""
-    sd_url: str = "http://127.0.0.1:7860"  # Stable Diffusion WebUI
+    sd_url: str = "http://127.0.0.1:7860"
     sd_steps: int = 20
     size: str = "1024x1024"
 
@@ -388,7 +395,7 @@ class FilesConfig:
     """Файловый менеджер."""
 
     enabled: bool = True
-    home_dir: str = str(Path.home())
+    home_dir: str = "~"
     max_search_results: int = 20
 
 
@@ -407,7 +414,7 @@ class FaceConfig:
 
     enabled: bool = False
     camera_index: int = 0
-    photo_dir: str = str(Path.home() / "Pictures" / "Jarvis")
+    photo_dir: str = "~/Pictures/Jarvis"
 
 
 @dataclass
@@ -415,12 +422,10 @@ class SkillsConfig:
     """Настройки навыков."""
 
     allow_shutdown: bool = False
-    screenshot_dir: str = str(Path.home() / "Pictures" / "Jarvis")
-    notes_file: str = str(Path.home() / ".jarvis" / "notes.md")
+    screenshot_dir: str = "~/Pictures/Jarvis"
+    notes_file: str = "~/.jarvis/notes.md"
     search_engine: str = "https://duckduckgo.com/?q={query}"
     apps: dict[str, str] = field(default_factory=dict)
-    # Алиасы: короткая фраза -> подсказка для LLM
-    # Например: "тихо" -> "установи громкость на 20 процентов"
     aliases: dict[str, str] = field(default_factory=dict)
     vision: VisionConfig = field(default_factory=VisionConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
@@ -471,9 +476,10 @@ class Config:
     ui: UiConfig = field(default_factory=UiConfig)
     monitor: MonitorConfig = field(default_factory=MonitorConfig)
     skills: SkillsConfig = field(default_factory=SkillsConfig)
-    aliases: dict[str, str] = field(default_factory=lambda: {
-        # Алиасы верхнего уровня (если не заданы в skills.aliases)
-    })
+    aliases: dict[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        _expand_all_paths(self)
 
     @property
     def openai_api_key(self) -> str:
@@ -481,20 +487,7 @@ class Config:
         return os.environ.get("OPENAI_API_KEY", "")
 
 
-def _build(cls: type[T], data: Mapping[str, Any]) -> T:
-    """Рекурсивно собирает dataclass из словаря, игнорируя лишние ключи."""
-    hints = get_type_hints(cls)
-    kwargs: dict[str, Any] = {}
-    for f in fields(cls):  # type: ignore[arg-type]
-        if f.name not in data:
-            continue
-        value = data[f.name]
-        hint = hints.get(f.name)
-        if is_dataclass(hint) and isinstance(value, Mapping):
-            kwargs[f.name] = _build(hint, value)  # type: ignore[arg-type]
-        else:
-            kwargs[f.name] = value
-    return cls(**kwargs)
+# ── Загрузка и валидация ─────────────────────────────────────────────
 
 
 # Правила валидации: (имя_поля, тип_или_кортеж_типов, мин, макс).
@@ -539,10 +532,77 @@ _VALIDATION_RULES: dict[str, tuple[type | tuple[type, ...] | None, Any, Any]] = 
 }
 
 
+def _is_path_field(field_name: str, parent_fields: set[str]) -> bool:
+    """Определяет, является ли поле путём к файлу/папке."""
+    if field_name in _URL_FIELDS:
+        return False
+    return any(field_name.endswith(s) for s in _PATH_SUFFIXES)
+
+
+def _expand_env(value: str) -> str:
+    """Подставляет ${VAR} из переменных окружения."""
+    def _replacer(m: re.Match) -> str:
+        return os.environ.get(m.group(1), m.group(0))
+    return _ENV_RE.sub(_replacer, value)
+
+
+def _warn_unknown(cls: type[Any], data: Mapping[str, Any], prefix: str = "") -> None:
+    """Логгит предупреждения о ключах в YAML, которых нет в dataclass."""
+    known = {f.name for f in fields(cls)}  # type: ignore[arg-type]
+    hints = get_type_hints(cls)
+    for key in data:
+        full = f"{prefix}{key}"
+        if key not in known:
+            log.warning("Конфиг: неизвестный ключ «%s» — будет проигнорирован", full)
+            continue
+        hint = hints.get(key)
+        if is_dataclass(hint) and isinstance(data[key], Mapping):
+            _warn_unknown(hint, data[key], full + ".")  # type: ignore[arg-type]
+
+
+def _expand_all_paths(obj: Any) -> None:
+    """Рекурсивно раскрывает ~ в строковых полях-путях для dataclass-объекта."""
+    if not is_dataclass(obj) or isinstance(obj, type):
+        return
+    for f in fields(obj):  # type: ignore[arg-type]
+        value = getattr(obj, f.name)
+        if is_dataclass(value) and not isinstance(value, type):
+            _expand_all_paths(value)
+        elif isinstance(value, str) and _is_path_field(f.name, set()):
+            expanded = os.path.expanduser(value)
+            if expanded != value:
+                object.__setattr__(obj, f.name, expanded)
+
+
+def _build(cls: type[T], data: Mapping[str, Any]) -> T:
+    """Рекурсивно собирает dataclass из словаря.
+
+    - Поля-пути с ~ автоматически разворачиваются через expanduser.
+    - Строковые значения поддерживают ${ENV_VAR} подстановку.
+    """
+    hints = get_type_hints(cls)
+    parent_field_names = {f.name for f in fields(cls)}  # type: ignore[arg-type]
+    kwargs: dict[str, Any] = {}
+    for f in fields(cls):  # type: ignore[arg-type]
+        if f.name not in data:
+            continue
+        value = data[f.name]
+        hint = hints.get(f.name)
+        if is_dataclass(hint) and isinstance(value, Mapping):
+            kwargs[f.name] = _build(hint, value)  # type: ignore[arg-type]
+        elif isinstance(value, str) and _is_path_field(f.name, parent_field_names):
+            kwargs[f.name] = _expand_env(value).expanduser()
+        elif isinstance(value, str):
+            kwargs[f.name] = _expand_env(value)
+        else:
+            kwargs[f.name] = value
+    return cls(**kwargs)
+
+
 def _sanitize(cls: type[Any], data: Mapping[str, Any], prefix: str = "") -> dict[str, Any]:
     """Проверяет типы и диапазоны, возвращая исправленную копию данных."""
     hints = get_type_hints(cls)
-    out: dict[str, Any] = dict(data)  # mutable copy
+    out: dict[str, Any] = dict(data)
     for f in fields(cls):  # type: ignore[arg-type]
         if f.name not in out:
             continue
@@ -550,7 +610,6 @@ def _sanitize(cls: type[Any], data: Mapping[str, Any], prefix: str = "") -> dict
         full_name = f"{prefix}{f.name}"
         hint = hints.get(f.name)
 
-        # Рекурсивная обработка вложенных dataclass.
         if is_dataclass(hint) and isinstance(value, Mapping):
             out[f.name] = _sanitize(hint, value, full_name + ".")  # type: ignore[arg-type]
             continue
@@ -560,14 +619,10 @@ def _sanitize(cls: type[Any], data: Mapping[str, Any], prefix: str = "") -> dict
             continue
         expected_types, min_val, max_val = rule
 
-        # Проверка типа: при несоответствии — сбрасываем в default.
         if expected_types is not None and not isinstance(value, expected_types):
             log.warning(
                 "Конфиг %s: ожидается %s, получено %s (%r). Берётся значение по умолчанию.",
-                full_name,
-                expected_types,
-                type(value).__name__,
-                value,
+                full_name, expected_types, type(value).__name__, value,
             )
             if f.default is not MISSING:
                 out[f.name] = f.default
@@ -575,24 +630,13 @@ def _sanitize(cls: type[Any], data: Mapping[str, Any], prefix: str = "") -> dict
                 out[f.name] = f.default_factory()
             continue
 
-        # Проверка диапазона: clamp к [min, max].
         if min_val is not None and value < min_val:
-            log.warning(
-                "Конфиг %s: значение %r меньше минимума %s. Исправляю на %s.",
-                full_name,
-                value,
-                min_val,
-                min_val,
-            )
+            log.warning("Конфиг %s: значение %r меньше минимума %s. Исправляю на %s.",
+                        full_name, value, min_val, min_val)
             out[f.name] = min_val
         if max_val is not None and value > max_val:
-            log.warning(
-                "Конфиг %s: значение %r больше максимума %s. Исправляю на %s.",
-                full_name,
-                value,
-                max_val,
-                max_val,
-            )
+            log.warning("Конфиг %s: значение %r больше максимума %s. Исправляю на %s.",
+                        full_name, value, max_val, max_val)
             out[f.name] = max_val
     return out
 
@@ -605,6 +649,31 @@ def load_config(path: str | os.PathLike[str] | None = None) -> Config:
             raw = yaml.safe_load(candidate.read_text(encoding="utf-8")) or {}
             if not isinstance(raw, Mapping):
                 raise ValueError(f"Некорректный конфиг: {candidate}")
+            _warn_unknown(Config, raw)
             sanitized = _sanitize(Config, raw)
             return _build(Config, sanitized)
     return Config()
+
+
+def init_config(target: Path | None = None) -> Path:
+    """Копирует config.example.yaml в config.yaml (или указанный путь).
+
+    Возвращает путь созданного файла.
+    """
+    dest = target or Path("config.yaml")
+    if dest.is_file():
+        raise FileExistsError(f"{dest} уже существует. Удалите или переименуйте его.")
+    # Ищем шаблон рядом с этим файлом (config.py) или в корне проекта.
+    this_dir = Path(__file__).resolve().parent
+    example_candidates = [
+        this_dir.parent / "config.example.yaml",
+        Path("config.example.yaml"),
+    ]
+    for src in example_candidates:
+        if src.is_file():
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dest)
+            return dest
+    raise FileNotFoundError(
+        "config.example.yaml не найден. Создайте config.yaml вручную."
+    )
