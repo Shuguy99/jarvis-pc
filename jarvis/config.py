@@ -98,14 +98,8 @@ class BrainConfig:
     temperature: float = 0.4
     max_history: int = 20
     max_tool_iterations: int = 5
-    system_prompt: str = (
-        "Ты — Джарвис, персональный ИИ-ассистент из фильмов про Тони Старка. "
-        "Отвечай по-русски, кратко, точно и с лёгкой британской иронией, "
-        "обращайся к пользователю «сэр». Ответ произносится вслух, поэтому "
-        "избегай markdown, списков и длинных перечислений. "
-        "Для действий на компьютере всегда вызывай доступные инструменты, "
-        "а не выдумывай результат."
-    )
+    system_prompt: str = ""
+    profile: str = "jarvis"  # jarvis | military | friendly | pirate | concise
 
 
 @dataclass

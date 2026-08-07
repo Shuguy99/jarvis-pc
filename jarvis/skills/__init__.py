@@ -11,7 +11,7 @@ from . import (
     clipboard, code_snippets, crypto, currency, desktop_notify as desktop_notify_mod,
     dictaphone, disk, email, env, expenses, face, files, git_helper, github,
     habits, homeassistant, image_gen, macros, memory, music_recognition, network,
-    news, notion_tasks, notes, password_gen, passwords, personal, pomodoro,
+    news, notion_tasks, notes, password_gen, passwords, personal, personality, pomodoro,
     processes, qr, radio, screenshot_save, self_update, sounds, spotify, system,
     sysupdate, telegram_bot, timer_skill, translator, unit_converter, vision, vpn,
     volume, weather, weather_alert, web, wifi, windows_manager, youtube,
@@ -162,6 +162,7 @@ def build_registry(config: Config, notify: Callable[[str], None]) -> tuple[Skill
     registry.extend(screenshot_save.build_skills(skills_config.screenshot_dir))
     registry.extend(dictaphone.build_skills(config.mic))
     registry.extend(youtube_music.build_skills())
+    registry.extend(personality.build_skills())
     # Пользовательские плагины
     from .plugins import load_plugins
 

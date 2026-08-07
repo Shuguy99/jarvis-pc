@@ -171,7 +171,11 @@ class Assistant:
             self._announce(f"Не могу получить доступ к микрофону: {exc}")
             return
         with mic:
-            self._announce(self.config.greeting)
+            from .skills.personality import get_profile_greeting
+            greeting = config.greeting
+            if not greeting or greeting == "Все системы в норме, сэр.":
+                greeting = get_profile_greeting()
+            self._announce(greeting)
             acoustic = self.wake_word.available and self.config.wake_word.enabled
             preroll: list[np.ndarray] = []
             self._emit(State.IDLE)

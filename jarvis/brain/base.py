@@ -182,8 +182,12 @@ class Brain(ABC):
 
     def _messages(self) -> list[Message]:
         """История с системным промптом в начале."""
+        prompt = self.config.system_prompt
+        if not prompt:
+            from ..skills.personality import get_profile_prompt
+            prompt = get_profile_prompt()
         with self._lock:
-            return [Message("system", self.config.system_prompt), *list(self.history)]
+            return [Message("system", prompt), *list(self.history)]
 
     def ask(self, user_text: str) -> str:
         """Обрабатывает реплику пользователя и возвращает финальный ответ."""
