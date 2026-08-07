@@ -7,10 +7,10 @@ from dataclasses import dataclass, field
 
 from ..config import Config
 from . import (
-    alarm, apps, browser, calendar, currency, desktop_notify as desktop_notify_mod,
-    env, face, files, github, homeassistant, macros, memory, news,
-    personal, pomodoro, sounds, spotify, system, telegram_bot,
-    translator, vision, vpn, weather, web, wifi, youtube,
+    alarm, agenda, apps, browser, calendar, currency, desktop_notify as desktop_notify_mod,
+    env, expenses, face, files, github, habits, homeassistant, macros,
+    memory, news, notes, passwords, personal, pomodoro, sounds,
+    spotify, system, telegram_bot, translator, vision, vpn, weather, web, wifi, youtube,
 )
 from .alarm import AlarmService
 from .browser import BrowserSession
@@ -42,23 +42,18 @@ class Services:
         """Освобождает ресурсы всех служб."""
         self.timers.shutdown()
         self.browser.shutdown()
-        if self.pomodoro is not None:
-            pass  # PomodoroService timers are daemon threads
         if self.alarm is not None:
             self.alarm.shutdown()
 
 
 def build_registry(config: Config, notify: Callable[[str], None]) -> tuple[SkillRegistry, Services]:
-    """Создаёт реестр всех навыков и связанные с ними службы.
-
-    Встроенные навыки регистрируются первыми, затем — пользовательские
-    плагины из ``~/.jarvis/skills/*.py``.
-    """
+    """Создаёт реестр всех навыков и связанные с ними службы."""
     skills_config = config.skills
     timers = TimerService(notify)
     memory_skills, memory_store = memory.build_skills(skills_config.memory)
     browser_skills, browser_session = browser.build_skills(skills_config.browser)
     registry = SkillRegistry()
+    # Базовые навыки
     registry.extend(system.build_skills(skills_config))
     registry.extend(apps.build_skills(skills_config))
     registry.extend(web.build_skills(skills_config))
@@ -87,7 +82,7 @@ def build_registry(config: Config, notify: Callable[[str], None]) -> tuple[Skill
         registry.extend(vpn.build_skills(skills_config.vpn))
     registry.extend(sounds.build_skills(skills_config.sounds))
     registry.extend(wifi.build_skills())
-    # --- Новые навыки ---
+    # --- Круто и полезно ---
     pomodoro_svc = None
     if skills_config.pomodoro.enabled:
         pomodoro_skills, pomodoro_svc = pomodoro.build_skills(skills_config.pomodoro, notify)
@@ -104,7 +99,18 @@ def build_registry(config: Config, notify: Callable[[str], None]) -> tuple[Skill
     if skills_config.alarm.enabled:
         alarm_skills, alarm_svc = alarm.build_skills(skills_config.alarm, notify)
         registry.extend(alarm_skills)
-    # Пользовательские плагины — последними, могут переопределить встроенные.
+    # --- Продуктивность ---
+    if skills_config.passwords.enabled:
+        registry.extend(passwords.build_skills(skills_config.passwords)[0])
+    if skills_config.notes.enabled:
+        registry.extend(notes.build_skills(skills_config.notes)[0])
+    if skills_config.agenda.enabled:
+        registry.extend(agenda.build_skills(skills_config.agenda, timers.list))
+    if skills_config.habits.enabled:
+        registry.extend(habits.build_skills(skills_config.habits)[0])
+    if skills_config.expenses.enabled:
+        registry.extend(expenses.build_skills(skills_config.expenses)[0])
+    # Пользовательские плагины
     from .plugins import load_plugins
 
     plugin_skills = load_plugins(config)

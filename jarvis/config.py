@@ -271,6 +271,47 @@ class AlarmConfig:
 
 
 @dataclass
+class PasswordsConfig:
+    """Менеджер паролей."""
+
+    enabled: bool = False
+    vault_file: str = str(Path.home() / ".jarvis" / "vault.json")
+
+
+@dataclass
+class NotesConfig:
+    """Заметки с тегами."""
+
+    enabled: bool = True
+    notes_db: str = str(Path.home() / ".jarvis" / "tagged_notes.json")
+
+
+@dataclass
+class AgendaConfig:
+    """Ежедневник."""
+
+    enabled: bool = True
+    ics_dir: str = str(Path.home() / ".jarvis" / "calendar")
+    notes_file: str = str(Path.home() / ".jarvis" / "notes.md")
+
+
+@dataclass
+class HabitsConfig:
+    """Трекер привычек."""
+
+    enabled: bool = True
+    habits_file: str = str(Path.home() / ".jarvis" / "habits.json")
+
+
+@dataclass
+class ExpensesConfig:
+    """Трекер расходов."""
+
+    enabled: bool = True
+    expenses_file: str = str(Path.home() / ".jarvis" / "expenses.json")
+
+
+@dataclass
 class FilesConfig:
     """Файловый менеджер."""
 
@@ -327,6 +368,11 @@ class SkillsConfig:
     homeassistant: HomeAssistantConfig = field(default_factory=HomeAssistantConfig)
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
     alarm: AlarmConfig = field(default_factory=AlarmConfig)
+    passwords: PasswordsConfig = field(default_factory=PasswordsConfig)
+    notes: NotesConfig = field(default_factory=NotesConfig)
+    agenda: AgendaConfig = field(default_factory=AgendaConfig)
+    habits: HabitsConfig = field(default_factory=HabitsConfig)
+    expenses: ExpensesConfig = field(default_factory=ExpensesConfig)
 
 
 @dataclass

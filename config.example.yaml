@@ -159,6 +159,22 @@ skills:
     enabled: true
     snooze_min: 5
 
+  passwords:               # менеджер паролей (отключён по умолчанию)
+    enabled: false
+    # vault_file: "~/.jarvis/vault.json"
+
+  notes:                   # заметки с тегами
+    enabled: true
+
+  agenda:                  # ежедневник (календарь + заметки + таймеры)
+    enabled: true
+
+  habits:                  # трекер привычек
+    enabled: true
+
+  expenses:                # трекер расходов
+    enabled: true
+
   aliases:                 # голосовые сокращения -> полная команда для LLM
     тихо: "установи громкость на 20 процентов"
     громко: "установи громкость на 80 процентов"
