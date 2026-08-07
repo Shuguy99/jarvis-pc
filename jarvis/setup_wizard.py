@@ -214,8 +214,37 @@ def _step_weather(lang: str) -> dict[str, str]:
     return {"weather_enabled": False}
 
 
+def _step_hotkey() -> dict[str, str]:
+    """Шаг 5: Горячая клавиша."""
+    print()
+    print("── Горячая клавиша ─────────────────────────")
+    print("  Нажатие этой комбинации начнёт запись голосовой команды")
+    print("  (без ключевого слова \u00abДжарвис\u00bb).")
+    hotkey = _ask("Комбинация (Enter по умолчанию)", "ctrl+alt+j")
+    return {"hotkey": hotkey}
+
+
+def _step_ui() -> dict[str, Any]:
+    """Шаг 6: Графический интерфейс (HUD)."""
+    from typing import Any
+    print()
+    print("── Интерфейс ──────────────────────────────")
+    try:
+        __import__("PySide6")
+        has_pyside = True
+    except ImportError:
+        has_pyside = False
+    if has_pyside:
+        enable = _ask_yes("Включить HUD-оверлей (нужен PySide6)?", default=True)
+    else:
+        print("  PySide6 не установлен — HUD недоступен.")
+        print("  Установите: pip install PySide6 (опционально)")
+        enable = False
+    return {"ui_enabled": enable}
+
+
 def _step_skills() -> dict[str, bool]:
-    """Шаг 5: Дополнительные навыки."""
+    """Шаг 7: Дополнительные навыки."""
     print()
     print("── Дополнительные навыки ────────────────────")
     print("  Остальные навыки уже включены по умолчанию.")
@@ -230,6 +259,8 @@ def _step_skills() -> dict[str, bool]:
         ("image_gen", "Генерация картинок (DALL-E / Stable Diffusion)"),
         ("music_recognition", "Распознавание музыки (AudD API)"),
         ("passwords", "Менеджер паролей"),
+        ("email", "Отправка email (нужен SMTP)"),
+        ("notion", "Задачи в Notion (нужен API ключ)"),
     ]
 
     result: dict[str, bool] = {}
@@ -241,7 +272,7 @@ def _step_skills() -> dict[str, bool]:
 
 
 def _step_api_keys(enabled_skills: dict[str, bool], lang: str) -> dict[str, str]:
-    """Шаг 6: API ключи для выбранных навыков."""
+    """Шаг 8: API ключи для выбранных навыков."""
     print()
     print("── API ключи ─────────────────────────────────")
     print("  Ключи хранятся в config.yaml. Для безопасности лучше"
@@ -254,7 +285,9 @@ def _step_api_keys(enabled_skills: dict[str, bool], lang: str) -> dict[str, str]
         "homeassistant": ("Home Assistant токен (Long-lived access token)", "token"),
         "image_gen": ("API ключ для генерации картинок", "api_key"),
         "music_recognition": ("AudD API токен (audd.io)", "api_key"),
-        "github": ("GitHub токен (или оставьте пустым — возьмётся из GITHUB_TOKEN)", "token"),
+        "github": ("GitHub токен (или оставьте пустым)", "token"),
+        "email": ("SMTP хост (например smtp.gmail.com)", "smtp_host"),
+        "notion": ("Notion API ключ (notion.so/my-integrations)", "api_key"),
     }
 
     for skill_key, (prompt, field_name) in prompts.items():
@@ -276,16 +309,27 @@ def _step_api_keys(enabled_skills: dict[str, bool], lang: str) -> dict[str, str]
 
 
 def _step_final() -> None:
-    """Финальное сообщение."""
+    """Финальное сообщение с проверкой зависимостей."""
     print()
-    print("════════════════════════════════════════════════")
+    print("=" * 50)
     print("  Готово! Конфиг создан: config.yaml")
-    print("════════════════════════════════════════════════")
+    print("=" * 50)
     print()
+    # Быстрая проверка критических зависимостей
+    missing = []
+    for mod, pkg in [("sounddevice", "sounddevice"), ("faster_whisper", "faster-whisper"), ("edge_tts", "edge-tts")]:
+        try:
+            __import__(mod)
+        except ImportError:
+            missing.append(pkg)
+    if missing:
+        print("  Установите недостающие компоненты:")
+        print(f"    pip install {' '.join(missing)}")
+        print()
     print("  Запуск:")
     print("    python -m jarvis              # голосовой режим")
     print("    python -m jarvis text         # текстовый режим")
-    print("    python -m jarvis doctor       # проверка зависимостей")
+    print("    python -m jarvis doctor       # полная диагностика")
     print()
     print("  Редактировать:  nano config.yaml  (или любой редактор)")
     print("  Все навыки:     https://github.com/Shuguy99/jarvis-pc#навыки")
@@ -300,6 +344,8 @@ def _build_config(
     brain: dict[str, Any],
     voice: dict[str, str],
     weather: dict[str, str],
+    hotkey: dict[str, str],
+    ui: dict[str, Any],
     skills: dict[str, bool],
     api_keys: dict[str, str],
 ) -> dict[str, Any]:
@@ -308,7 +354,9 @@ def _build_config(
 
     cfg: dict[str, Any] = {
         "log_level": "INFO",
+        "hotkey": hotkey.get("hotkey", "ctrl+alt+j"),
         "greeting": "Все системы в норме, сэр." if lang == "ru" else "All systems nominal, sir.",
+        "ui": {"enabled": ui.get("ui_enabled", False)},
         "stt": {
             "language": "ru" if lang == "ru" else "en",
         },
@@ -431,14 +479,20 @@ def run_setup() -> int:
     # Шаг 4: Погода
     weather_data = _step_weather(lang)
 
-    # Шаг 5: Навыки
+    # Шаг 5: Горячая клавиша
+    hotkey_data = _step_hotkey()
+
+    # Шаг 6: Интерфейс
+    ui_data = _step_ui()
+
+    # Шаг 7: Навыки
     skills_data = _step_skills()
 
-    # Шаг 6: API ключи
+    # Шаг 8: API ключи
     api_keys_data = _step_api_keys(skills_data, lang)
 
     # Генерация
-    config_data = _build_config(lang, brain_data, voice_data, weather_data, skills_data, api_keys_data)
+    config_data = _build_config(lang, brain_data, voice_data, weather_data, hotkey_data, ui_data, skills_data, api_keys_data)
     _save_config(config_data, target)
 
     _step_final()

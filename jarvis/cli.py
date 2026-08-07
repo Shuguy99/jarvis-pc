@@ -168,6 +168,7 @@ def doctor(config: Config) -> int:
         ("chromadb", "долговременная память"),
         ("playwright", "автоматизация браузера"),
         ("spotipy", "управление Spotify"),
+        ("yaml", "конфигурация YAML"),
     ):
         try:
             __import__(module)
