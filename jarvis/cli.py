@@ -166,6 +166,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("text", help="текстовый режим в консоли")
     sub.add_parser("devices", help="список аудиоустройств")
     sub.add_parser("doctor", help="диагностика зависимостей")
+    sub.add_parser("setup", help="интерактивный мастер настройки")
+    config_sub = sub.add_parser("config", help="работа с конфигурацией")
+    config_sub.add_argument("action", nargs="?", default="init", choices=["init"], help="init — создать из шаблона")
     once = sub.add_parser("once", help="выполнить одну команду")
     once.add_argument("command", nargs="+", help="текст команды")
     return parser
@@ -174,9 +177,22 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     """Запускает выбранный режим работы."""
     args = build_parser().parse_args(argv)
+    mode = args.mode or "voice"
+
+    # Режимы без конфига
+    if mode == "setup":
+        from .setup_wizard import run_setup
+        return run_setup()
+    if mode == "config":
+        from .config import init_config
+        path = init_config()
+        print(f"Конфиг создан: {path}")
+        return 0
+
+    # Режимы с конфигом
     config = load_config(args.config)
     _setup_logging(args.log_level or config.log_level)
-    mode = args.mode or "voice"
+
     if mode == "text":
         return run_text(config)
     if mode == "devices":
