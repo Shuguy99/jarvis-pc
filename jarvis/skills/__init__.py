@@ -7,12 +7,14 @@ from dataclasses import dataclass, field
 
 from ..config import Config
 from . import (
-    alarm, agenda, apps, browser, calendar, currency, desktop_notify as desktop_notify_mod,
-    disk, env, expenses, face, files, github, habits, homeassistant, image_gen,
-    macros, memory, music_recognition, network, news, notes,
-    passwords, personal, pomodoro, processes, qr, radio, sounds, spotify, system,
-    sysupdate, telegram_bot, translator, vision, vpn, weather, web, wifi,
-    windows_manager, youtube,
+    alarm, agenda, apps, battery, bluetooth, brightness, browser, calculator, calendar,
+    clipboard, code_snippets, crypto, currency, desktop_notify as desktop_notify_mod,
+    dictaphone, disk, email, env, expenses, face, files, git_helper, github,
+    habits, homeassistant, image_gen, macros, memory, music_recognition, network,
+    news, notion_tasks, notes, password_gen, passwords, personal, pomodoro,
+    processes, qr, radio, screenshot_save, self_update, sounds, spotify, system,
+    sysupdate, telegram_bot, timer_skill, translator, unit_converter, vision, vpn,
+    volume, weather, weather_alert, web, wifi, windows_manager, youtube,
 )
 from .alarm import AlarmService
 from .browser import BrowserSession
@@ -20,6 +22,7 @@ from .memory import Memory
 from .personal import TimerService
 from .pomodoro import PomodoroService
 from .registry import Skill, SkillRegistry
+from .timer_skill import TimerSkillService
 
 __all__ = [
     "Services",
@@ -39,6 +42,7 @@ class Services:
     browser: BrowserSession
     pomodoro: PomodoroService | None = None
     alarm: AlarmService | None = None
+    timer_skill: TimerSkillService | None = None
 
     def shutdown(self) -> None:
         """Освобождает ресурсы всех служб."""
@@ -46,6 +50,8 @@ class Services:
         self.browser.shutdown()
         if self.alarm is not None:
             self.alarm.shutdown()
+        if self.timer_skill is not None:
+            self.timer_skill.shutdown()
 
 
 def build_registry(config: Config, notify: Callable[[str], None]) -> tuple[SkillRegistry, Services]:
@@ -132,10 +138,32 @@ def build_registry(config: Config, notify: Callable[[str], None]) -> tuple[Skill
         registry.extend(image_gen.build_skills(skills_config.image_gen))
     if skills_config.radio.enabled:
         registry.extend(radio.build_skills())
+    # --- Новые навыки ---
+    registry.extend(volume.build_skills())
+    registry.extend(clipboard.build_skills())
+    registry.extend(calculator.build_skills())
+    registry.extend(battery.build_skills())
+    registry.extend(bluetooth.build_skills())
+    registry.extend(brightness.build_skills())
+    registry.extend(password_gen.build_skills())
+    registry.extend(git_helper.build_skills())
+    registry.extend(code_snippets.build_skills())
+    registry.extend(unit_converter.build_skills())
+    registry.extend(email.build_skills())
+    registry.extend(self_update.build_skills())
+    registry.extend(crypto.build_skills())
+    registry.extend(weather_alert.build_skills())
+    registry.extend(notion_tasks.build_skills())
+    # Таймер (нужен notify)
+    timer_skill_svc = TimerSkillService(notify)
+    registry.extend(timer_skill.build_skills(timer_skill_svc))
+    # Скриншот и диктофон (нужен конфиг)
+    registry.extend(screenshot_save.build_skills(skills_config.screenshot_dir))
+    registry.extend(dictaphone.build_skills(config.mic))
     # Пользовательские плагины
     from .plugins import load_plugins
 
     plugin_skills = load_plugins(config)
     if plugin_skills:
         registry.extend(plugin_skills)
-    return registry, Services(timers, memory_store, browser_session, pomodoro_svc, alarm_svc)
+    return registry, Services(timers, memory_store, browser_session, pomodoro_svc, alarm_svc, timer_skill_svc)
