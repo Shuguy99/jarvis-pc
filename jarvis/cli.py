@@ -61,8 +61,55 @@ def run_text(config: Config) -> int:
     return 0
 
 
+def _check_critical_deps(config: Config) -> list[str]:
+    """Проверяет критические зависимости для голосового режима. Возвращает список проблем."""
+    missing: list[str] = []
+    try:
+        __import__("sounddevice")
+    except ImportError:
+        missing.append("sounddevice — нужен для микрофона. Установите: pip install sounddevice")
+    try:
+        __import__("faster_whisper")
+    except ImportError:
+        missing.append("faster-whisper — нужен для распознавания речи. Установите: pip install faster-whisper")
+    # TTS: проверяем что хотя бы один движок доступен
+    has_tts = False
+    try:
+        __import__("edge_tts")
+        has_tts = True
+    except ImportError:
+        pass
+    try:
+        __import__("pyttsx3")
+        has_tts = True
+    except ImportError:
+        pass
+    if not has_tts:
+        missing.append("edge-tts или pyttsx3 — нужен для озвучивания. Установите: pip install edge-tts")
+    # UI: если включён, проверяем PySide6
+    if config.ui.enabled:
+        try:
+            __import__("PySide6")
+        except ImportError:
+            missing.append(
+                "PySide6 не установлен, но ui.enabled: true. "
+                "Либо установите PySide6, либо отключите UI в config.yaml: ui.enabled: false"
+            )
+    return missing
+
+
 def run_voice(config: Config) -> int:
     """Голосовой режим с HUD-оверлеем или без него."""
+    problems = _check_critical_deps(config)
+    if problems:
+        print("\n⚠  Джарвис не может запуститься — не хватает компонентов:\n")
+        for p in problems:
+            print(f"  • {p}")
+        print(
+            "\nЗапустите диагностику: python -m jarvis doctor"
+            "\nИли мастер настройки: python -m jarvis setup\n"
+        )
+        return 1
     if config.ui.enabled:
         from .ui import run_hud
 

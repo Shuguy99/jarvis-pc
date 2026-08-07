@@ -135,6 +135,12 @@ class Assistant:
         self._emit(State.THINKING)
         try:
             text = self.stt.transcribe(audio, self.config.mic.sample_rate)
+        except (ImportError, RuntimeError) as exc:
+            msg = str(exc)
+            log.error("STT недоступен: %s", msg)
+            self._announce(msg)
+            self._emit(State.IDLE)
+            return
         except Exception:
             log.exception("Ошибка распознавания речи")
             self._emit(State.IDLE)

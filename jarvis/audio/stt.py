@@ -59,7 +59,15 @@ class SpeechToText:
         """Возвращает распознанный текст для float32-сигнала."""
         if audio.size < MIN_AUDIO_S * sample_rate:
             return ""
-        model = self.load()
+        try:
+            model = self.load()
+        except ImportError:
+            log.error(
+                "faster-whisper не установлен. Установите: pip install faster-whisper"
+            )
+            raise RuntimeError(
+                "faster-whisper не установлен. Запустите: pip install faster-whisper"
+            )
         segments, _ = model.transcribe(
             audio,
             language=self.config.language,

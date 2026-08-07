@@ -51,8 +51,12 @@ class Speaker:
         engine = self._sapi_engine()
         if engine is None:
             return False
-        engine.say(text)  # type: ignore[attr-defined]
-        engine.runAndWait()  # type: ignore[attr-defined]
+        try:
+            engine.say(text)  # type: ignore[attr-defined]
+            engine.runAndWait()  # type: ignore[attr-defined]
+        except Exception:
+            log.exception("Системный TTS не смог произнести текст")
+            return False
         return True
 
     def _speak_edge(self, text: str) -> bool:

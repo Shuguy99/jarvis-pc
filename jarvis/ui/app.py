@@ -6,17 +6,18 @@ import logging
 import sys
 import threading
 
-from PySide6.QtWidgets import QApplication
-
 from ..assistant import Assistant, Event
 from ..config import Config
-from .hud import HudWindow
 
 log = logging.getLogger(__name__)
 
 
 def run_hud(config: Config) -> int:
     """Показывает оверлей и слушает микрофон до закрытия окна."""
+    from PySide6.QtWidgets import QApplication  # noqa: delayed import — optional dep
+
+    from .hud import HudWindow
+
     app = QApplication.instance() or QApplication(sys.argv)
     window_holder: dict[str, HudWindow] = {}
 
