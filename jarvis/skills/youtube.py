@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 import subprocess
+import tempfile
 
 from ..config import YouTubeConfig
 from .registry import Skill, object_schema
@@ -56,10 +58,18 @@ def play_youtube(config: YouTubeConfig, query: str) -> str:
         url = _search_youtube(query)
         if not url:
             return f"Не нашёл '{query}' на YouTube, сэр."
+    ipc_path = os.path.join(tempfile.gettempdir(), "jarvis-mpv-ipc")
+    # Удаляем старый сокет если есть
+    if os.path.exists(ipc_path):
+        try:
+            os.remove(ipc_path)
+        except OSError:
+            pass
     cmd = ["mpv"]
     if config.audio_only:
         cmd.append("--no-video")
     cmd.append(f"--volume={config.volume}")
+    cmd.append(f"--input-ipc-server={ipc_path}")
     cmd.append(url)
     try:
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -71,10 +81,19 @@ def play_youtube(config: YouTubeConfig, query: str) -> str:
 
 def stop_music() -> str:
     """Останавливает MPV плеер."""
-    if not _is_available("pkill"):
-        return "Не могу остановить: pkill недоступен, сэр."
     try:
-        subprocess.run(["pkill", "-f", "mpv"], check=False, timeout=5)
+        if _is_available("pkill"):
+            subprocess.run(["pkill", "-f", "mpv"], check=False, timeout=5)
+        elif _is_available("taskkill"):
+            subprocess.run(["taskkill", "/F", "/IM", "mpv.exe"], check=False, timeout=5)
+        else:
+            return "Не могу остановить MPV: нет pkill/taskkill, сэр."
+        ipc_path = os.path.join(tempfile.gettempdir(), "jarvis-mpv-ipc")
+        if os.path.exists(ipc_path):
+            try:
+                os.remove(ipc_path)
+            except OSError:
+                pass
         return "Воспроизведение остановлено, сэр."
     except Exception as exc:
         return f"Ошибка остановки: {exc}, сэр."

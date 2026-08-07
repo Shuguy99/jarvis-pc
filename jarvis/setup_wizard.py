@@ -1,499 +1,367 @@
 """Интерактивный мастер настройки Джарвиса.
 
 Запуск: python -m jarvis setup
-Проводит пользователя по шагам:
-  1. Язык
-  2. Мозг (Ollama / OpenAI / совместимый)
-  3. Голос (TTS)
-  4. Город для погоды
-  5. Дополнительные навыки
-Генерирует минимальный config.yaml с тем, что изменил пользователь.
+Проводит пользователя по ключевым шагам:
+1. Проверка зависимостей
+2. Выбор TTS-движка
+3. Выбор LLM-бэкенда
+4. Настройка голоса и микрофона
+5. Включение/отключение UI
+6. Создание config.yaml
 """
 
 from __future__ import annotations
 
-import shutil
+import os
+import platform
+import subprocess
 import sys
 from pathlib import Path
 
 import yaml
 
 
-# ── Вспомогательные функции ─────────────────────────────────────────
+def _c(text: str, code: int = 0) -> str:
+    """Цветной текст ANSI (0=reset, 1=bold, 31=red, 32=green, 33=yellow, 34=blue, 36=cyan)."""
+    return f"\033[{code}m{text}\033[0m"
 
 
-def _ask(text: str, default: str = "") -> str:
-    """Спрашивает у пользователя строку. Enter = default."""
-    hint = f" [{default}]" if default else ""
+def _bold(text: str) -> str:
+    return _c(text, 1)
+
+
+def _green(text: str) -> str:
+    return _c(text, 32)
+
+
+def _yellow(text: str) -> str:
+    return _c(text, 33)
+
+
+def _cyan(text: str) -> str:
+    return _c(text, 36)
+
+
+def _red(text: str) -> str:
+    return _c(text, 31)
+
+
+def _input(prompt: str, default: str = "") -> str:
+    """Ввод с подсказкой дефолта."""
+    hint = f" [{_green(default)}]" if default else ""
     try:
-        answer = input(f"  {text}{hint}: ").strip()
+        val = input(f"  {prompt}{hint}: ").strip()
     except (EOFError, KeyboardInterrupt):
         print()
         sys.exit(0)
-    return answer or default
+    return val or default
 
 
-def _ask_choice(text: str, options: list[tuple[str, str]], default: str = "") -> str:
-    """Спрашивает выбор из списка. Возвращает value первого элемента."""
-    print(f"  {text}")
-    for i, (key, label) in enumerate(options, 1):
-        marker = " (по умолчанию)" if key == default else ""
-        print(f"    {i}) {label}{marker}")
+def _choice(prompt: str, options: list[tuple[str, str]], default: int = 0) -> str:
+    """Выбор из списка. Возвращает value первого элемента."""
+    print(f"  {prompt}:")
+    for i, (label, desc) in enumerate(options):
+        marker = _bold("> ") if i == default else "  "
+        print(f"    {marker}{_cyan(str(i + 1))}. {label} — {desc}")
     while True:
-        answer = _ask("Ваш выбор", default)
-        # Позволяем вводить и номер, и ключ
-        for i, (key, _) in enumerate(options, 1):
-            if answer == str(i) or answer.lower() == key.lower():
-                return key
-        print(f"    Выберите число от 1 до {len(options)} или ключ: {', '.join(k for k, _ in options)}")
+        try:
+            val = input(f"  Ваш выбор [{_green(str(default + 1))}]: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            sys.exit(0)
+        if not val:
+            return options[default][0]
+        try:
+            idx = int(val) - 1
+            if 0 <= idx < len(options):
+                return options[idx][0]
+        except ValueError:
+            pass
+        print(f"    {_yellow('Введите число от 1 до ' + str(len(options)))}")
 
 
-def _ask_yes(text: str, default: bool = True) -> bool:
+def _yes_no(prompt: str, default: bool = True) -> bool:
     """Да/Нет вопрос."""
-    hint = "Y/n" if default else "y/N"
-    answer = _ask(f"{text} ({hint})", "да" if default else "нет")
-    return answer.lower().startswith("д") or answer.lower().startswith("y") or (answer == "" and default)
-
-
-def _check_ollama() -> bool:
-    """Проверяет, доступен ли Ollama."""
-    import subprocess
+    hint = "[Y/n]" if default else "[y/N]"
     try:
-        r = subprocess.run(["ollama", "list"], capture_output=True, timeout=5)
-        return r.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+        val = input(f"  {prompt} {hint}: ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        sys.exit(0)
+    if not val:
+        return default
+    return val in ("y", "yes", "да", "д")
+
+
+def _check_module(name: str) -> bool:
+    try:
+        __import__(name)
+        return True
+    except ImportError:
         return False
 
 
-def _get_ollama_models() -> list[str]:
-    """Возвращает список установленных моделей Ollama."""
-    import subprocess
-    try:
-        r = subprocess.run(["ollama", "list"], capture_output=True, text=True, timeout=5)
-        if r.returncode != 0:
-            return []
-        lines = r.stdout.strip().split("\n")
-        # Первая строка — заголовок
-        return [line.split()[0] for line in lines[1:] if line.strip()]
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return []
+def _check_cmd(cmd: str) -> bool:
+    import shutil
+    return shutil.which(cmd) is not None
 
 
-def _check_openai_key() -> bool:
-    """Проверяет, задан ли OPENAI_API_KEY в окружении."""
-    import os
-    return bool(os.environ.get("OPENAI_API_KEY"))
-
-
-# ── Шаги мастера ────────────────────────────────────────────────────
-
-
-def _step_language() -> dict[str, str]:
-    """Шаг 1: Язык."""
+def step_welcome() -> None:
     print()
-    print("── Язык ─────────────────────────────────────")
-    lang = _ask_choice(
-        "На каком языке Джарвис будет с вами общаться?",
-        [
-            ("ru", "Русский"),
-            ("en", "English"),
-        ],
-        default="ru",
-    )
-    return {"lang": lang}
-
-
-def _step_brain(lang: str) -> dict[str, Any]:
-    """Шаг 2: Выбор мозга (LLM)."""
-    from typing import Any
-
+    print(_bold("╔══════════════════════════════════════════════════╗"))
+    print(_bold("║     Мастер настройки J.A.R.V.I.S.              ║"))
+    print(_bold("║     Интерактивная настройка ассистента         ║"))
+    print(_bold("╚══════════════════════════════════════════════════╝"))
     print()
-    print("── Мозг (LLM) ───────────────────────────────")
-    print("  Джарвису нужна языковая модель для понимания команд.")
-    print("  Ollama — бесплатная, работает локально (рекомендуется).")
-    print("  OpenAI — платная, но работает без установки.")
-
-    ollama_ok = _check_ollama()
-    openai_ok = _check_openai_key()
-
-    # Авто-определение лучшего варианта
-    if ollama_ok and not openai_ok:
-        recommended = "ollama"
-    elif openai_ok and not ollama_ok:
-        recommended = "openai"
-    else:
-        recommended = "ollama"
-
-    backend = _ask_choice(
-        "Что будете использовать?",
-        [
-            ("ollama", f"Ollama (локально) {'— установлен' if ollama_ok else '— НЕ установлен, нужно: ollama.com'}"),
-            ("openai", f"OpenAI / совместимый {'— ключ есть' if openai_ok else '— нужен OPENAI_API_KEY'}"),
-        ],
-        default=recommended,
-    )
-
-    result: dict[str, Any] = {"backend": backend}
-
-    if backend == "ollama":
-        models = _get_ollama_models()
-        if models:
-            print(f"  Найдены модели: {', '.join(models)}")
-            default_model = "qwen2.5:7b-instruct" if "qwen2.5:7b-instruct" in models else (models[0] if models else "")
-            model = _ask("Какую модель использовать?", default_model)
-        else:
-            print("  Установленных моделей нет. Рекомендую:")
-            print("    ollama pull qwen2.5:7b-instruct   # быстрая, хорошая по-русски")
-            print("    ollama pull llama3.1:8b           # надежная")
-            model = _ask("Модель (поставите позже через ollama pull)", "qwen2.5:7b-instruct")
-        host = _ask("Адрес Ollama (если на этом ПК — Enter)", "http://127.0.0.1:11434")
-        result.update({"ollama_model": model, "ollama_host": host})
-
-    else:  # openai
-        if not openai_ok:
-            print()
-            print("  ⚠  OPENAI_API_KEY не найден в переменных окружения.")
-            print("  Задайте его ПЕРЕД запуском Джарвиса:")
-            print("    Linux/Mac:  export OPENAI_API_KEY=sk-...")
-            print("    Windows:    set OPENAI_API_KEY=sk-...")
-            print()
-        model = _ask("Модель", "gpt-4o-mini")
-        base_url = _ask("Базовый URL (Enter для стандартного OpenAI, или OpenRouter/совместимый)", "")
-        result.update({"openai_model": model, "openai_base_url": base_url})
-
-    return result
-
-
-def _step_voice(lang: str) -> dict[str, str]:
-    """Шаг 3: Синтез речи (как Джарвис говорит)."""
-    print()
-    print("── Голос ────────────────────────────────────")
-
-    import platform
-    is_windows = platform.system() == "Windows"
-
-    if is_windows:
-        options = [
-            ("sapi5", "Windows SAPI5 (офлайн, уже работает)"),
-            ("edge", "Edge TTS (онлайн, звучит лучше, нужен интернет)"),
-        ]
-    else:
-        options = [
-            ("edge", "Edge TTS (онлайн, нейронный голос, нужен интернет)"),
-        ]
-
-    engine = _ask_choice("Какой движок озвучки?", options, default=options[0][0])
-    result: dict[str, str] = {"tts_engine": engine}
-
-    if engine == "edge":
-        if lang == "ru":
-            voice = _ask(
-                "Голос Edge (Enter = по умолчанию)",
-                "ru-RU-DmitryNeural",
-            )
-        else:
-            voice = _ask(
-                "Edge voice (Enter = default)",
-                "en-US-AndrewNeural",
-            )
-        result["edge_voice"] = voice
-
-    return result
-
-
-def _step_weather(lang: str) -> dict[str, str]:
-    """Шаг 4: Погода."""
-    print()
-    print("── Погода ───────────────────────────────────")
-    if _ask_yes("Включить навык «погода»?", default=True):
-        if lang == "ru":
-            city = _ask("Ваш город", "Москва")
-        else:
-            city = _ask("Your city", "London")
-        return {"weather_enabled": True, "weather_city": city}
-    return {"weather_enabled": False}
-
-
-def _step_hotkey() -> dict[str, str]:
-    """Шаг 5: Горячая клавиша."""
-    print()
-    print("── Горячая клавиша ─────────────────────────")
-    print("  Нажатие этой комбинации начнёт запись голосовой команды")
-    print("  (без ключевого слова \u00abДжарвис\u00bb).")
-    hotkey = _ask("Комбинация (Enter по умолчанию)", "ctrl+alt+j")
-    return {"hotkey": hotkey}
-
-
-def _step_ui() -> dict[str, Any]:
-    """Шаг 6: Графический интерфейс (HUD)."""
-    from typing import Any
-    print()
-    print("── Интерфейс ──────────────────────────────")
-    try:
-        __import__("PySide6")
-        has_pyside = True
-    except ImportError:
-        has_pyside = False
-    if has_pyside:
-        enable = _ask_yes("Включить HUD-оверлей (нужен PySide6)?", default=True)
-    else:
-        print("  PySide6 не установлен — HUD недоступен.")
-        print("  Установите: pip install PySide6 (опционально)")
-        enable = False
-    return {"ui_enabled": enable}
-
-
-def _step_skills() -> dict[str, bool]:
-    """Шаг 7: Дополнительные навыки."""
-    print()
-    print("── Дополнительные навыки ────────────────────")
-    print("  Остальные навыки уже включены по умолчанию.")
-    print("  Здесь — те, которые требуют сторонних ключей или сервисов.")
+    print(f"  {_yellow('Этот мастер поможет настроить Джарвиса за пару минут.')}")
+    print(f"  {_yellow('Отвечайте на вопросы или нажимайте Enter для значений по умолчанию.')}")
     print()
 
-    extras = [
-        ("spotify", "Spotify (нужен аккаунт Spotify Developer)"),
-        ("telegram", "Telegram бот (нужен бот от @BotFather)"),
-        ("homeassistant", "Home Assistant / умный дом"),
-        ("github", "GitHub (коммиты, issues, PR)"),
-        ("image_gen", "Генерация картинок (DALL-E / Stable Diffusion)"),
-        ("music_recognition", "Распознавание музыки (AudD API)"),
-        ("passwords", "Менеджер паролей"),
-        ("email", "Отправка email (нужен SMTP)"),
-        ("notion", "Задачи в Notion (нужен API ключ)"),
+
+def step_check_deps() -> list[str]:
+    """Проверяет зависимости и возвращает список отсутствующих."""
+    print(_bold("[1/6] Проверка зависимостей..."))
+    print()
+    checks = [
+        ("sounddevice", "захват микрофона", True),
+        ("webrtcvad", "детектор речи (VAD)", True),
+        ("faster_whisper", "распознавание речи (STT)", True),
+        ("edge_tts", "neural-голос (TTS)", False),
+        ("pyttsx3", "офлайн-голос (TTS)", False),
+        ("openwakeword", "пробуждение по слову", False),
+        ("PySide6", "HUD-оверлей", False),
+        ("playwright", "автоматизация браузера", False),
+        ("psutil", "статус системы", False),
+        ("chromadb", "долговременная память", False),
     ]
-
-    result: dict[str, bool] = {}
-    for key, label in extras:
-        if _ask_yes(f"  Включить «{label}»?", default=False):
-            result[key] = True
-
-    return result
-
-
-def _step_api_keys(enabled_skills: dict[str, bool], lang: str) -> dict[str, str]:
-    """Шаг 8: API ключи для выбранных навыков."""
-    print()
-    print("── API ключи ─────────────────────────────────")
-    print("  Ключи хранятся в config.yaml. Для безопасности лучше"
-          " использовать переменные окружения: ${VAR_NAME}")
-    print()
-
-    result: dict[str, str] = {}
-    prompts: dict[str, tuple[str, str]] = {
-        "telegram": ("Telegram бот-токен (от @BotFather)", "bot_token"),
-        "homeassistant": ("Home Assistant токен (Long-lived access token)", "token"),
-        "image_gen": ("API ключ для генерации картинок", "api_key"),
-        "music_recognition": ("AudD API токен (audd.io)", "api_key"),
-        "github": ("GitHub токен (или оставьте пустым)", "token"),
-        "email": ("SMTP хост (например smtp.gmail.com)", "smtp_host"),
-        "notion": ("Notion API ключ (notion.so/my-integrations)", "api_key"),
-    }
-
-    for skill_key, (prompt, field_name) in prompts.items():
-        if enabled_skills.get(skill_key):
-            val = _ask(f"  {prompt} (Enter чтобы задать позже)", "")
-            if val:
-                result[f"{skill_key}_{field_name}"] = val
-
-    # Telegram: дополнительно нужен chat_id
-    if enabled_skills.get("telegram"):
-        if lang == "ru":
-            cid = _ask("  Telegram chat ID (можно узнать у @userinfobot)", "")
+    missing: list[str] = []
+    for module, purpose, critical in checks:
+        ok = _check_module(module)
+        if ok:
+            print(f"    {_green('OK')}  {module:<18} — {purpose}")
         else:
-            cid = _ask("  Telegram chat ID (check @userinfobot)", "")
-        if cid:
-            result["telegram_chat_id"] = cid
-
-    return result
-
-
-def _step_final() -> None:
-    """Финальное сообщение с проверкой зависимостей."""
-    print()
-    print("=" * 50)
-    print("  Готово! Конфиг создан: config.yaml")
-    print("=" * 50)
-    print()
-    # Быстрая проверка критических зависимостей
-    missing = []
-    for mod, pkg in [("sounddevice", "sounddevice"), ("faster_whisper", "faster-whisper"), ("edge_tts", "edge-tts")]:
-        try:
-            __import__(mod)
-        except ImportError:
-            missing.append(pkg)
+            tag = _red("!!!") if critical else _yellow("... ")
+            print(f"    {tag}  {module:<18} — {purpose}")
+            missing.append(f"pip install {module.replace('_', '-')}")
+    # Системные утилиты
+    for cmd, purpose in [("mpv", "плеер для музыки"), ("yt-dlp", "загрузка с YouTube")]:
+        ok = _check_cmd(cmd)
+        if ok:
+            print(f"    {_green('OK')}  {cmd:<18} — {purpose}")
+        else:
+            print(f"    {_yellow('... ')}  {cmd:<18} — {purpose}")
+            if cmd == "mpv":
+                missing.append("apt install mpv  (или скачайте с mpv.io)")
+            else:
+                missing.append("pip install yt-dlp")
     if missing:
-        print("  Установите недостающие компоненты:")
-        print(f"    pip install {' '.join(missing)}")
         print()
-    print("  Запуск:")
-    print("    python -m jarvis              # голосовой режим")
-    print("    python -m jarvis text         # текстовый режим")
-    print("    python -m jarvis doctor       # полная диагностика")
+        print(f"  {_yellow('Отсутствуют некоторые компоненты. Установите их позже:')}")
+        for m in missing:
+            print(f"    {m}")
     print()
-    print("  Редактировать:  nano config.yaml  (или любой редактор)")
-    print("  Все навыки:     https://github.com/Shuguy99/jarvis-pc#навыки")
+    return missing
+
+
+def step_tts() -> dict:
+    """Выбор TTS-движка."""
+    print(_bold("[2/6] Настройка голоса (TTS)"))
     print()
-
-
-# ── Генерация YAML ─────────────────────────────────────────────────
-
-
-def _build_config(
-    lang: str,
-    brain: dict[str, Any],
-    voice: dict[str, str],
-    weather: dict[str, str],
-    hotkey: dict[str, str],
-    ui: dict[str, Any],
-    skills: dict[str, bool],
-    api_keys: dict[str, str],
-) -> dict[str, Any]:
-    """Собирает словарь конфигурации из ответов мастера."""
-    from typing import Any
-
-    cfg: dict[str, Any] = {
-        "log_level": "INFO",
-        "hotkey": hotkey.get("hotkey", "ctrl+alt+j"),
-        "greeting": "Все системы в норме, сэр." if lang == "ru" else "All systems nominal, sir.",
-        "ui": {"enabled": ui.get("ui_enabled", False)},
-        "stt": {
-            "language": "ru" if lang == "ru" else "en",
-        },
-        "brain": {},
-        "skills": {
-            "weather": {},
-        },
-    }
-
-    # Мозг
-    if brain["backend"] == "ollama":
-        cfg["brain"] = {
-            "backend": "ollama",
-            "ollama_model": brain.get("ollama_model", "qwen2.5:7b-instruct"),
-            "ollama_host": brain.get("ollama_host", "http://127.0.0.1:11434"),
-        }
+    has_edge = _check_module("edge_tts")
+    has_sapi = _check_module("pyttsx3")
+    if not has_edge and not has_sapi:
+        print(f"  {_red('Ни один TTS-движок не установлен!')}")
+        print(f"  {_yellow('Установите: pip install edge-tts')}")
+        print()
+        return {"tts": {"engine": "edge", "edge_voice": "ru-RU-DmitryNeural", "rate": 190, "volume": 1.0}}
+    if has_edge:
+        engine = _choice("Выберите TTS-движок", [
+            ("edge", "Microsoft Edge Neural TTS (качественный, нужен интернет)"),
+            ("sapi5", "pyttsx3 / SAPI5 (офлайн, Windows)"),
+        ], default=0)
     else:
-        brain_dict: dict[str, Any] = {
-            "backend": "openai",
-            "openai_model": brain.get("openai_model", "gpt-4o-mini"),
-        }
-        base_url = brain.get("openai_base_url", "")
+        engine = "sapi5"
+        print(f"  {_yellow('edge-tts не установлен, используем pyttsx3')}")
+    config: dict = {"tts": {"engine": engine, "rate": 190, "volume": 1.0}}
+    if engine == "edge":
+        print()
+        print("  Доступные русские голоса Edge:")
+        voices = [
+            ("ru-RU-DmitryNeural", "Дмитрий (мужской, по умолчанию)"),
+            ("ru-RU-SvetlanaNeural", "Светлана (женский)"),
+        ]
+        voice = _choice("Голос", voices, default=0)
+        config["tts"]["edge_voice"] = voice
+    else:
+        voice_name = _input("Имя голоса SAPI (часть, например 'Irina' или 'David')", "")
+        if voice_name:
+            config["tts"]["voice"] = voice_name
+    rate = _input("Скорость речи (50-450, по умолчанию 190)", "190")
+    try:
+        config["tts"]["rate"] = int(rate)
+    except ValueError:
+        pass
+    print()
+    return config
+
+
+def step_brain() -> dict:
+    """Выбор LLM-бэкенда."""
+    print(_bold("[3/6] Настройка мозга (LLM)"))
+    print()
+    backend = _choice("Выберите бэкенд", [
+        ("ollama", "Ollama (локальная модель, бесплатно, нужна установка)"),
+        ("openai", "OpenAI / совместимое API (GPT-4o-mini и др.)"),
+        ("offline", "Оффлайн-режим (только навыки, без LLM)"),
+    ], default=0)
+    config: dict = {"brain": {"backend": backend, "temperature": 0.4, "max_history": 20, "max_tool_iterations": 5}}
+    if backend == "ollama":
+        print()
+        host = _input("Адрес Ollama", "http://127.0.0.1:11434")
+        model = _input("Модель Ollama", "qwen2.5:7b-instruct")
+        config["brain"]["ollama_host"] = host
+        config["brain"]["ollama_model"] = model
+        print(f"  {_yellow('Убедитесь что Ollama запущена и модель загружена:')}")
+        print(f"    ollama serve && ollama pull {model}")
+    elif backend == "openai":
+        print()
+        print(f"  {_yellow('API-ключ берётся из переменной окружения OPENAI_API_KEY.')}")
+        base_url = _input("Базовый URL (пустой = api.openai.com)", "")
+        model = _input("Модель", "gpt-4o-mini")
         if base_url:
-            brain_dict["openai_base_url"] = base_url
-        cfg["brain"] = brain_dict
+            config["brain"]["openai_base_url"] = base_url
+        config["brain"]["openai_model"] = model
+    print()
+    return config
 
-    # Голос
-    if voice.get("tts_engine") == "edge":
-        cfg["tts"] = {
-            "engine": "edge",
-            "edge_voice": voice.get("edge_voice", "ru-RU-DmitryNeural"),
-        }
 
-    # Погода
-    if weather.get("weather_enabled"):
-        cfg["skills"]["weather"] = {
-            "enabled": True,
-            "default_city": weather.get("weather_city", "Москва"),
-        }
+def step_stt_mic() -> dict:
+    """Настройка STT и микрофона."""
+    print(_bold("[4/6] Настройка распознавания речи и микрофона"))
+    print()
+    config: dict = {
+        "stt": {"model": "small", "language": "ru", "device": "auto", "compute_type": "int8"},
+        "mic": {"sample_rate": 16000, "frame_ms": 30, "vad_aggressiveness": 2, "silence_ms": 800},
+    }
+    if not _check_module("faster_whisper"):
+        print(f"  {_yellow('faster-whisper не установлен — распознавание речи не будет работать.')}")
+        print(f"  Установите: pip install faster-whisper")
+        print()
+        return config
+    print("  Модели STT (от быстрой к точной):")
+    model = _choice("Модель Whisper", [
+        ("tiny", "крошечная — супер быстро, много ошибок"),
+        ("base", "базовая — быстро, неплохо для русского"),
+        ("small", "маленькая — баланс скорости и качества (рекомендую)"),
+        ("medium", "средняя — медленнее, точнее"),
+        ("large-v3", "большая — самая точная, требует 10GB+ RAM"),
+    ], default=2)
+    config["stt"]["model"] = model
+    lang = _choice("Основной язык", [
+        ("ru", "Русский"),
+        ("en", "English"),
+        ("auto", "Автоопределение"),
+    ], default=0)
+    config["stt"]["language"] = lang
+    if _check_module("sounddevice"):
+        print()
+        print(f"  {_cyan('Чтобы выбрать микрофон, запустите: python -m jarvis devices')}")
+        dev = _input("Индекс микрофона (пустой = по умолчанию)", "")
+        if dev:
+            try:
+                config["mic"]["device"] = int(dev)
+            except ValueError:
+                pass
+    print()
+    return config
+
+
+def step_ui_wakeword() -> dict:
+    """Настройка UI и слова пробуждения."""
+    print(_bold("[5/6] Настройка интерфейса и пробуждения"))
+    print()
+    config: dict = {}
+    # UI
+    has_pyside6 = _check_module("PySide6")
+    ui_on = False
+    if has_pyside6:
+        ui_on = _yes_no("Включить HUD-оверлей (прозрачное окно Джарвиса)?", default=False)
     else:
-        cfg["skills"]["weather"] = {"enabled": False}
-
-    # Дополнительные навыки
-    for key, enabled in skills.items():
-        if key == "github" and enabled:
-            cfg["skills"][key] = {"enabled": True}
-            if f"{key}_token" in api_keys:
-                cfg["skills"][key]["token"] = api_keys[f"{key}_token"]
-        elif key == "telegram" and enabled:
-            cfg["skills"][key] = {"enabled": True}
-            if f"{key}_bot_token" in api_keys:
-                cfg["skills"][key]["bot_token"] = api_keys[f"{key}_bot_token"]
-            if "telegram_chat_id" in api_keys:
-                cfg["skills"][key]["chat_id"] = api_keys["telegram_chat_id"]
-        elif key == "homeassistant" and enabled:
-            cfg["skills"][key] = {"enabled": True}
-            if f"{key}_token" in api_keys:
-                cfg["skills"][key]["token"] = api_keys[f"{key}_token"]
-        elif key == "image_gen" and enabled:
-            cfg["skills"][key] = {"enabled": True, "backend": "openai"}
-            if f"{key}_api_key" in api_keys:
-                cfg["skills"][key]["api_key"] = api_keys[f"{key}_api_key"]
-        elif key == "music_recognition" and enabled:
-            cfg["skills"][key] = {"enabled": True}
-            if f"{key}_api_key" in api_keys:
-                cfg["skills"][key]["api_key"] = api_keys[f"{key}_api_key"]
-        elif key == "passwords" and enabled:
-            cfg["skills"][key] = {"enabled": True}
-        elif key == "spotify" and enabled:
-            cfg["skills"][key] = {"enabled": True}
-
-    return cfg
+        print(f"  {_yellow('PySide6 не установлен — HUD отключён.')}")
+    config["ui"] = {"enabled": ui_on, "opacity": 0.85, "accent": "#3fd0ff", "corner": "bottom-right"}
+    # Wakeword
+    has_www = _check_module("openwakeword")
+    ww_on = False
+    if has_www:
+        ww_on = _yes_no("Включить пробуждение по слову 'Джарвис'? (openwakeword)", default=True)
+    else:
+        print(f"  {_yellow('openwakeword не установлен — пробуждение по слову отключено.')}")
+        print(f"  Установите: pip install openwakeword")
+    config["wake_word"] = {"enabled": ww_on, "threshold": 0.5, "fallback_phrases": ["джарвис", "jarvis"]}
+    # Monitor
+    mon_on = _yes_no("Включить фоновый мониторинг (батарея, память, диск)?", default=True)
+    config["monitor"] = {"enabled": mon_on, "interval_s": 60, "battery_low": 20, "battery_critical": 10}
+    # Hotkey
+    system = platform.system()
+    if system == "Linux":
+        default_hotkey = "ctrl+alt+j"
+    elif system == "Windows":
+        default_hotkey = "ctrl+alt+j"
+    else:
+        default_hotkey = "cmd+alt+j"
+    hotkey = _input(f"Горячая клавиша для активации", default_hotkey)
+    config["hotkey"] = hotkey
+    print()
+    return config
 
 
-def _save_config(data: dict[str, Any], path: Path) -> None:
-    """Сохраняет конфиг в YAML с красивым форматированием."""
-    from typing import Any
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        "# Конфигурация Джарвиса (создана мастером настройки)\n"
-        "# Редактируйте как угодно. Полный пример: config.example.yaml\n\n"
-        + yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False),
-        encoding="utf-8",
-    )
-
-
-# ── Точка входа ─────────────────────────────────────────────────────
+def step_finish(config: dict) -> int:
+    """Сохраняет config.yaml и показывает итог."""
+    print(_bold("[6/6] Сохранение конфигурации"))
+    print()
+    # Определяем путь
+    default_path = Path.home() / ".jarvis" / "config.yaml"
+    use_home = _yes_no(f"Сохранить в {default_path}?", default=True)
+    if use_home:
+        target = default_path
+    else:
+        p = _input("Путь к файлу конфигурации", "config.yaml")
+        target = Path(p).expanduser()
+    if target.exists():
+        if not _yes_no(f"Файл {target} существует. Перезаписать?", default=False):
+            print(f"  {_yellow('Конфигурация не сохранена.')}")
+            return 0
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with open(target, "w", encoding="utf-8") as f:
+        yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    print(f"  {_green(f'Конфигурация сохранена: {target}')}")
+    print()
+    print(_bold("══════════════════════════════════════════════════"))
+    print(f"  {_green('Настройка завершена!')}")
+    print()
+    print(f"  Запустить Джарвиса:")
+    print(f"    {_cyan('python -m jarvis voice')}       — голосовой режим")
+    print(f"    {_cyan('python -m jarvis text')}        — текстовый режим")
+    print(f"    {_cyan('python -m jarvis doctor')}      — диагностика")
+    print()
+    if target != Path("config.yaml"):
+        print(f"  Указать путь к конфигу:")
+        print(f"    {_cyan(f'python -m jarvis voice --config {target}')}")
+        print()
+    print(_bold("══════════════════════════════════════════════════"))
+    return 0
 
 
 def run_setup() -> int:
-    """Запускает интерактивный мастер настройки."""
-    from typing import Any
-
-    print()
-    print("╔═══════════════════════════════════════════════════╗")
-    print("║  J.A.R.V.I.S. — Мастер настройки                 ║")
-    print("║  Ответьте на несколько вопросов — и можно начать  ║")
-    print("╚═══════════════════════════════════════════════════╝")
-
-    # Проверяем нет ли уже config.yaml
-    target = Path("config.yaml")
-    if target.is_file():
-        print()
-        print(f"  ⚠  Файл {target} уже существует.")
-        if not _ask_yes("Перезаписать? (старый конфиг будет потерян)", default=False):
-            print("  Отменено.")
-            return 0
-
-    # Шаг 1: Язык
-    lang_data = _step_language()
-    lang = lang_data["lang"]
-
-    # Шаг 2: Мозг
-    brain_data = _step_brain(lang)
-
-    # Шаг 3: Голос
-    voice_data = _step_voice(lang)
-
-    # Шаг 4: Погода
-    weather_data = _step_weather(lang)
-
-    # Шаг 5: Горячая клавиша
-    hotkey_data = _step_hotkey()
-
-    # Шаг 6: Интерфейс
-    ui_data = _step_ui()
-
-    # Шаг 7: Навыки
-    skills_data = _step_skills()
-
-    # Шаг 8: API ключи
-    api_keys_data = _step_api_keys(skills_data, lang)
-
-    # Генерация
-    config_data = _build_config(lang, brain_data, voice_data, weather_data, hotkey_data, ui_data, skills_data, api_keys_data)
-    _save_config(config_data, target)
-
-    _step_final()
-    return 0
+    """Запускает мастер настройки."""
+    step_welcome()
+    step_check_deps()
+    config: dict = {
+        "greeting": "Все системы в норме, сэр.",
+        "log_level": "INFO",
+    }
+    config.update(step_tts())
+    config.update(step_brain())
+    config.update(step_stt_mic())
+    config.update(step_ui_wakeword())
+    return step_finish(config)

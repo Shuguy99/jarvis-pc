@@ -15,6 +15,7 @@ from . import (
     processes, qr, radio, screenshot_save, self_update, sounds, spotify, system,
     sysupdate, telegram_bot, timer_skill, translator, unit_converter, vision, vpn,
     volume, weather, weather_alert, web, wifi, windows_manager, youtube,
+    youtube_music,
 )
 from .alarm import AlarmService
 from .browser import BrowserSession
@@ -160,6 +161,7 @@ def build_registry(config: Config, notify: Callable[[str], None]) -> tuple[Skill
     # Скриншот и диктофон (нужен конфиг)
     registry.extend(screenshot_save.build_skills(skills_config.screenshot_dir))
     registry.extend(dictaphone.build_skills(config.mic))
+    registry.extend(youtube_music.build_skills())
     # Пользовательские плагины
     from .plugins import load_plugins
 
