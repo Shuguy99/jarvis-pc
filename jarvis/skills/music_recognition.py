@@ -88,7 +88,7 @@ def recognize(config: MusicRecognitionConfig) -> str:
     try:
         Path(audio).unlink(missing_ok=True)
     except Exception:
-        pass
+        log.debug("music_recognition: не критичная ошибка при Path(audio).unlink(missing_ok=True)")
     return result
 
 

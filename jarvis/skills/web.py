@@ -88,6 +88,7 @@ def _extract_ddg_url(raw: str) -> str:
     try:
         return urllib.parse.unquote(match.group(1))
     except Exception:
+        log.debug("web: ошибка (line 90), используем fallback")
         return raw
 
 

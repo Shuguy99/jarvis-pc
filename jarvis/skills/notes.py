@@ -25,6 +25,7 @@ class TaggedNotes:
             try:
                 self._notes = json.loads(self._path.read_text("utf-8"))
             except Exception:
+                log.debug("notes: ошибка инициализации self._notes, используется fallback")
                 self._notes = []
 
     def _save(self) -> None:

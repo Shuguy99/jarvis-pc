@@ -25,7 +25,7 @@ def _get_volume() -> int:
                 interface = devices.Activate(IAudioEndpointVolume._iid_, 0, None, None)
                 return int(interface.GetMasterVolumeLevelScalar() * 100)
             except Exception:
-                pass
+                log.debug("pycaw недоступен для получения громкости")
             return 50
         if IS_MACOS:
             r = subprocess.run(["osascript", "-e", "output volume of (get volume settings)"],
@@ -39,6 +39,7 @@ def _get_volume() -> int:
                     return int(part.rstrip("%"))
         return 50
     except Exception:
+        log.debug("volume: ошибка (line 41), используем fallback")
         return 50
 
 
@@ -52,7 +53,7 @@ def _set_volume(level: int) -> str:
                 interface = devices.Activate(IAudioEndpointVolume._iid_, 0, None, None)
                 interface.SetMasterVolumeLevelScalar(level / 100, None)
             except Exception:
-                pass
+                log.debug("pycaw недоступен для установки громкости")
         elif IS_MACOS:
             subprocess.run(["osascript", "-e", f"set volume output volume {level}"],
                            check=False, timeout=5)

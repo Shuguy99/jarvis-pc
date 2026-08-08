@@ -52,7 +52,7 @@ def _stop_player() -> None:
         try:
             subprocess.run(["pkill", "-f", "mpv.*radio"], check=False, timeout=5)
         except Exception:
-            pass
+            log.debug("radio: не критичная ошибка при subprocess.run(['pkill', '-f', 'mpv.*radio'], chec")
         _PLAYER = None
 
 

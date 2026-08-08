@@ -154,6 +154,7 @@ def _parse_csv(path: Path) -> str:
                 if parts:
                     rows.append(". ".join(parts))
     except Exception:
+        log.debug("rag: не удалось распарсить CSV %s, читаю как текст", path.name)
         # Fallback: просто читаем как текст
         return path.read_text(encoding="utf-8", errors="replace")
     return "\n\n".join(rows)
@@ -821,7 +822,7 @@ class RagEngine:
                 count = self.store.add_chunks(source_id, f.name, chunks)
                 total += count
             except Exception:
-                pass
+                log.debug("rag: ошибка при обработке файла %s", f.name)
         if total > 0:
             log.info("RAG auto-ingest: %d файлов, %d фрагментов", len(files), total)
         return f"auto-ingested {total} chunks from {len(files)} files"

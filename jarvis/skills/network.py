@@ -64,6 +64,7 @@ def speedtest() -> str:
             mbps = speed * 8 / 1_000_000
             return f"Скорость загрузки: {mbps:.1f} Мбит/с, сэр."
         except Exception:
+            log.debug("network: пропуск элемента (line 66)")
             continue
     return "Не удалось измерить скорость. Проверьте интернет, сэр."
 
@@ -99,7 +100,7 @@ def scan_ports(host: str = "localhost", ports: str = "") -> str:
                 open_ports.append(port)
             sock.close()
         except Exception:
-            pass
+            log.debug("network: не критичная ошибка при sock.close()")
     if not open_ports:
         return f"На {host} нет открытых портов из проверенных ({len(port_list)}), сэр."
     port_str = ", ".join(str(p) for p in open_ports)
@@ -117,7 +118,7 @@ def my_ip() -> str:
         if ip and re.match(r"^\d+\.\d+\.\d+\.\d+$", ip):
             return f"Ваш IP: {ip}, сэр."
     except Exception:
-        pass
+        log.debug("network: не критичная ошибка при return f'Ваш IP: {ip}, сэр.'")
     return "Не удалось узнать IP, сэр."
 
 

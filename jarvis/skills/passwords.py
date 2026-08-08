@@ -88,6 +88,7 @@ class Vault:
                 self._unlocked = True
                 return f"Хранилище разблокировано. {len(self._entries)} записей, сэр."
             except Exception:
+                log.debug("passwords: ошибка (line 90), используем fallback")
                 return "Неверный мастер-пароль, сэр."
         # Нет зашифрованных данных — создаём
         self._unlocked = True

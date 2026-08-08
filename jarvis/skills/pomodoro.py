@@ -49,6 +49,7 @@ class PomodoroService:
                 data = json.loads(self._stats_path.read_text("utf-8"))
                 self._done_today = data.get(today, 0)
             except Exception:
+                log.debug("pomodoro: ошибка инициализации self._done_today, используется fallback")
                 self._done_today = 0
 
     def _save_today(self) -> None:
@@ -59,7 +60,7 @@ class PomodoroService:
                 try:
                     data = json.loads(self._stats_path.read_text("utf-8"))
                 except Exception:
-                    pass
+                    log.debug("pomodoro: повреждённый файл статистики, пересоздаём")
             data[self._today_str] = self._done_today
             self._stats_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), "utf-8")
         except Exception as exc:
@@ -129,6 +130,7 @@ class PomodoroService:
             try:
                 data = json.loads(self._stats_path.read_text("utf-8"))
             except Exception:
+                log.debug("pomodoro: ошибка (line 131)")
                 data = {}
         else:
             data = {}

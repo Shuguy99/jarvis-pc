@@ -130,6 +130,7 @@ class BrowserSession:
                         locator.first.fill(text)
                         return f"Ввёл текст в поле «{field}»."
                 except Exception:
+                    log.debug("browser: пропуск элемента (line 132)")
                     continue
             # Fallback: пробуем как CSS-селектор.
             try:

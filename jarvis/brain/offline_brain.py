@@ -191,7 +191,7 @@ class OfflineBrain(Brain):
                     try:
                         self._on_tool_result(skill, reply)
                     except Exception:
-                        pass
+                        log.debug("offline_brain: ошибка в on_tool_result")
             self.history.append(Message("assistant", reply))
             self._trim()
             self.save_session()

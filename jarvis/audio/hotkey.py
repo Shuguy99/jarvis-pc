@@ -109,5 +109,5 @@ class HotkeyListener:
             try:
                 self._listener.stop()  # type: ignore[attr-defined]
             except Exception:
-                pass
+                log.debug("hotkey: не критичная ошибка при self._listener.stop()  # type: ignore[attr-defined")
             self._listener = None

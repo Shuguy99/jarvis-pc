@@ -121,7 +121,7 @@ def _get_wifi_device() -> str:
             if len(parts) >= 2 and parts[1].strip().lower() == "wifi":
                 return parts[0].strip()
     except Exception:
-        pass
+        log.debug("wifi: не критичная ошибка при return parts[0].strip()")
     return "wlan0"
 
 

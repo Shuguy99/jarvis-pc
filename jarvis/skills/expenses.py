@@ -33,6 +33,7 @@ class ExpenseTracker:
             try:
                 self._expenses = json.loads(self._path.read_text("utf-8"))
             except Exception:
+                log.debug("expenses: ошибка инициализации self._expenses, используется fallback")
                 self._expenses = []
 
     def _save(self) -> None:

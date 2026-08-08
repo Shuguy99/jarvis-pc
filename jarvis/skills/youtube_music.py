@@ -43,6 +43,7 @@ def _mpv_command(cmd: dict) -> dict | None:
             try:
                 pipe = open(_IPC_PATH, "w+b", 0)
             except Exception:
+                log.debug("youtube_music: не удалось открыть IPC pipe")
                 return None
             try:
                 payload = (json.dumps(cmd) + chr(10)).encode()

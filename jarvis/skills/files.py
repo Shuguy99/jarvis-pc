@@ -33,6 +33,7 @@ def list_files(config: FilesConfig, directory: str = "", pattern: str = "") -> s
         try:
             entries = [e for e in entries if e.match(pattern)]
         except Exception:
+            log.debug("files: ошибка (line 35)")
             entries = [e for e in entries if pattern.lower() in e.name.lower()]
     if not entries:
         filter_msg = f" по шаблону '{pattern}'" if pattern else ""

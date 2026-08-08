@@ -26,6 +26,7 @@ def _get_active_window_id() -> str | None:
         )
         return result.stdout.strip() or None
     except Exception:
+        log.debug("windows_manager: ошибка (line 28), используем fallback")
         return None
 
 
@@ -37,6 +38,7 @@ def _get_screen_resolution() -> tuple[int, int]:
             user32 = ctypes.windll.user32
             return user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
         except Exception:
+            log.debug("windows_manager: ошибка (line 39), используем fallback")
             return 1920, 1080
     if IS_LINUX and shutil.which("xdpyinfo"):
         try:
@@ -48,7 +50,7 @@ def _get_screen_resolution() -> tuple[int, int]:
             if m:
                 return int(m.group(1)), int(m.group(2))
         except Exception:
-            pass
+            log.debug("windows_manager: не критичная ошибка при return int(m.group(1)), int(m.group(2))")
     return 1920, 1080
 
 
@@ -86,7 +88,7 @@ def snap_left() -> str:
             user32.keybd_event(0x25, 0, 2, 0)
             return "Окно на левой половине, сэр."
         except Exception:
-            pass
+            log.debug("windows_manager: не критичная ошибка при return 'Окно на левой половине, сэр.'")
     return "Не поддерживается на этой ОС, сэр."
 
 
@@ -105,7 +107,7 @@ def snap_right() -> str:
             user32.keybd_event(0x27, 0, 2, 0)
             return "Окно на правой половине, сэр."
         except Exception:
-            pass
+            log.debug("windows_manager: не критичная ошибка при return 'Окно на правой половине, сэр.'")
     return "Не поддерживается, сэр."
 
 
@@ -128,7 +130,7 @@ def maximize() -> str:
             user32.keybd_event(0x26, 0, 2, 0)
             return "Окно развёрнуто, сэр."
         except Exception:
-            pass
+            log.debug("windows_manager: не критичная ошибка при return 'Окно развёрнуто, сэр.'")
     return "Не поддерживается, сэр."
 
 
@@ -147,7 +149,7 @@ def minimize() -> str:
             user32.keybd_event(0x28, 0, 2, 0)
             return "Окно свёрнуто, сэр."
         except Exception:
-            pass
+            log.debug("windows_manager: не критичная ошибка при return 'Окно свёрнуто, сэр.'")
     return "Не поддерживается, сэр."
 
 

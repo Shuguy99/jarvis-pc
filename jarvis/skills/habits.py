@@ -28,6 +28,7 @@ class HabitTracker:
             try:
                 self._habits = json.loads(self._path.read_text("utf-8"))
             except Exception:
+                log.debug("habits: ошибка инициализации self._habits, используется fallback")
                 self._habits = {}
 
     def _save(self) -> None:

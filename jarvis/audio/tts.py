@@ -122,7 +122,7 @@ class Speaker:
                     playsound(str(path))
                     result[0] = True
                 except Exception:
-                    pass
+                    log.debug("playsound3 не смог воспроизвести %s", path)
             t = threading.Thread(target=_play_thread, daemon=True)
             t.start()
             t.join(timeout=30)
@@ -185,4 +185,4 @@ class Speaker:
             if rate != self.config.rate:
                 self.config.rate = rate
         except Exception:
-            pass
+            log.debug("Не удалось применить профиль голоса")

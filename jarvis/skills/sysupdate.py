@@ -72,7 +72,7 @@ def run_update() -> str:
             subprocess.Popen(["powershell", "-Command", "Start-WUScan"], check=False)
             return "Windows Update запущен, сэр."
         except Exception:
-            pass
+            log.debug("sysupdate: не критичная ошибка при return 'Windows Update запущен, сэр.'")
     return "Не поддерживается, сэр."
 
 

@@ -18,7 +18,7 @@ def _load() -> dict:
         try:
             return json.loads(_SNIPPETS_FILE.read_text(encoding="utf-8"))
         except Exception:
-            pass
+            log.debug("code_snippets: не критичная ошибка при return json.loads(_SNIPPETS_FILE.read_text(encodin")
     return {}
 
 

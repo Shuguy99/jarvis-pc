@@ -88,7 +88,7 @@ def _fetch_manifest(owner: str, repo: str, token: str = "") -> dict[str, Any] | 
             if isinstance(data, dict):
                 return data
     except Exception:
-        pass
+        log.debug("plugin_store: не критичная ошибка при return data")
     # Пробуем ветку master
     url = f"{_RAW_BASE}/{owner}/{repo}/master/jarvis.json"
     req = urllib.request.Request(url, headers=headers)
@@ -98,7 +98,7 @@ def _fetch_manifest(owner: str, repo: str, token: str = "") -> dict[str, Any] | 
             if isinstance(data, dict):
                 return data
     except Exception:
-        pass
+        log.debug("plugin_store: не критичная ошибка при return data")
     return None
 
 
@@ -117,6 +117,7 @@ def _fetch_readme(owner: str, repo: str, token: str = "") -> str:
         lines = [l for l in text.strip().split("\n") if l.strip() and not l.startswith("#")]
         return " ".join(lines)[:500]
     except Exception:
+        log.debug("plugin_store: ошибка (line 119), используем fallback")
         return ""
 
 

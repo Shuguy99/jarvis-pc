@@ -57,6 +57,7 @@ def stock_price(symbol: str = "AAPL") -> str:
         name = meta.get("symbol", symbol)
         return f"{name}: ${price} (вчера: ${prev}), сэр."
     except Exception:
+        log.debug("crypto: ошибка (line 59), используем fallback")
         return f"Не удалось получить данные по {symbol}, сэр."
 
 

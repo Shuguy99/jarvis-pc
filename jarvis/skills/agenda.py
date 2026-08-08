@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 from collections.abc import Callable
 from pathlib import Path
 
 from ..config import AgendaConfig
 from .registry import Skill, object_schema
+
+log = logging.getLogger(__name__)
 
 
 def _load_ics_events(ics_dir: str) -> list[dict[str, str]]:
@@ -21,6 +24,7 @@ def _load_ics_events(ics_dir: str) -> list[dict[str, str]]:
         try:
             text = ics_file.read_text("utf-8")
         except Exception:
+            log.debug("agenda: не удалось прочитать %s", ics_file.name)
             continue
         # Разбиваем на события
         for block in text.split("BEGIN:VEVENT"):

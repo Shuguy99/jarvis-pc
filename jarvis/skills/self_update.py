@@ -27,6 +27,7 @@ def current_version() -> str:
         r = subprocess.run(["git", "log", "-1", "--oneline"], capture_output=True, text=True, timeout=5)
         return f"Версия: {r.stdout.strip()}, сэр." if r.stdout.strip() else "Не удалось определить, сэр."
     except Exception:
+        log.debug("self_update: ошибка (line 29), используем fallback")
         return "git недоступен, сэр."
 
 

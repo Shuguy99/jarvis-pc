@@ -26,7 +26,7 @@ def _load_cache() -> dict:
             if datetime.now(timezone.utc).timestamp() - data.get("ts", 0) < _CACHE_TTL:
                 return data.get("rates", {})
         except Exception:
-            pass
+            log.debug("currency: не критичная ошибка при return data.get('rates', {})")
     return {}
 
 

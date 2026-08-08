@@ -97,6 +97,7 @@ def list_macros() -> str:
             actions = json.loads(f.read_text(encoding="utf-8"))
             count = len(actions)
         except Exception:
+            log.debug("macros: ошибка (line 99)")
             count = "?"
         lines.append(f"  {f.stem} ({count} действий)")
     return "\n".join(lines)

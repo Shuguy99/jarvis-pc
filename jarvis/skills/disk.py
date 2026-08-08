@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import platform
 import shutil
@@ -9,6 +10,8 @@ import subprocess
 from pathlib import Path
 
 from .registry import Skill, object_schema
+
+log = logging.getLogger(__name__)
 
 IS_LINUX = platform.system() == "Linux"
 IS_WINDOWS = platform.system() == "Windows"
@@ -35,7 +38,7 @@ def disk_usage(path: str = "~") -> str:
                     lines.append(f"  {letter}: {used}/{total} ГБ занято ({pct}%)")
             return "\n".join(lines) if len(lines) > 1 else "Не удалось получить информацию, сэр."
         except Exception:
-            pass
+            log.debug("disk: wmic недоступен, используем fallback")
     # Linux / fallback через shutil
     p = Path(path)
     if not p.is_dir():
@@ -43,6 +46,7 @@ def disk_usage(path: str = "~") -> str:
     try:
         usage = shutil.disk_usage(str(p))
     except Exception:
+        log.debug("disk: не удалось получить статистику для %s", path)
         return f"Не удалось получить статистику для {path}, сэр."
     total_gb = usage.total / (1024**3)
     used_gb = usage.used / (1024**3)
