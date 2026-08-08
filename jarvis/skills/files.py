@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from ..config import FilesConfig
-from .registry import Skill, object_schema
+from .registry import Skill, _confirm_handler, object_schema
 
 log = logging.getLogger(__name__)
 
@@ -226,7 +226,7 @@ def build_skills(config: FilesConfig) -> list[Skill]:
                 },
                 required=["path"],
             ),
-            handler=lambda path: delete_file(config, path),
+            handler=_confirm_handler(lambda path: delete_file(config, path), "Удалить {path}?"),
         ),
         Skill(
             name="file_info",

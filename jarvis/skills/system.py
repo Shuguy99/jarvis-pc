@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 
 from ..config import SkillsConfig
-from .registry import Skill, object_schema
+from .registry import Skill, _confirm_handler, object_schema
 
 log = logging.getLogger(__name__)
 
@@ -359,6 +359,9 @@ def build_skills(config: SkillsConfig) -> list[Skill]:
                 },
                 required=["action"],
             ),
-            handler=lambda action, delay_s=20: power_action(config, action, delay_s),
+            handler=_confirm_handler(
+                lambda action, delay_s=20: power_action(config, action, delay_s),
+                'Выполнить {action} компьютера?',
+            ),
         ),
     ]

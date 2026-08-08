@@ -12,7 +12,7 @@ import subprocess
 _SAFE_CMD_RE = re.compile(r'^[\w\-./ :\\а-яА-ЯёЁ]+$')
 
 from ..config import SkillsConfig
-from .registry import Skill, object_schema
+from .registry import Skill, _confirm_handler, object_schema
 
 IS_WINDOWS = platform.system() == "Windows"
 
@@ -166,7 +166,7 @@ def build_skills(config: SkillsConfig) -> list[Skill]:
                 {"name": {"type": "string", "description": "Название приложения"}},
                 required=["name"],
             ),
-            handler=close_app,
+            handler=_confirm_handler(close_app, 'Закрыть все процессы "{name}"?'),
         ),
         Skill(
             name="list_windows",

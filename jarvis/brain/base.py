@@ -14,6 +14,7 @@ from typing import Any
 
 from ..config import BrainConfig
 from ..skills import SkillRegistry
+from ..skills.registry import ConfirmationRequired
 
 log = logging.getLogger(__name__)
 
@@ -67,6 +68,8 @@ class Brain(ABC):
         self.history: list[Message] = []
         self._lock = threading.RLock()
         self._on_tool_result = on_tool_result
+        # Множество подтверждённых вызовов: (skill_name, frozenset(args))
+        self._confirmed: set[tuple[str, frozenset[tuple[str, Any]]]] = set()
 
     @abstractmethod
     def _chat(self, messages: list[Message]) -> Message:
@@ -76,6 +79,7 @@ class Brain(ABC):
         """Очищает историю диалога."""
         with self._lock:
             self.history.clear()
+            self._confirmed.clear()
             self._delete_session()
 
     @staticmethod
@@ -202,7 +206,41 @@ class Brain(ABC):
                     return reply.content.strip() or "Готово, сэр."
                 for call in reply.tool_calls:
                     log.info("Вызов навыка %s с %s", call.name, call.arguments)
-                    result = self.skills.call(call.name, call.arguments)
+                    call_key = (call.name, frozenset((k, v) for k, v in (call.arguments or {}).items()))
+                    is_confirmed = call_key in self._confirmed
+                    try:
+                        result = self.skills.call(call.name, call.arguments)
+                    except ConfirmationRequired as cr:
+                        if is_confirmed:
+                            # Уже подтверждено — выполняем напрямую через оригинальный handler.
+                            log.info("Повторный вызов подтверждённого %s — выполняем", call.name)
+                            skill = self.skills._skills.get(call.name)
+                            if skill and hasattr(skill.handler, '_original'):
+                                result = skill.handler._original(**(call.arguments or {}))
+                            else:
+                                result = f"Навык «{call.name}» требует подтверждения, но не удалось выполнить."
+                        else:
+                            # Навык запросил подтверждение — отправляем вопрос пользователю.
+                            log.info("Подтверждение для %s: %s", call.name, cr.message)
+                            self._confirmed.add(call_key)
+                            confirm_msg = (
+                                f"⚠️ Требуется подтверждение: {cr.message}\n"
+                                f"Ответьте «да»/«подтверждаю» для выполнения или «нет»/«отмена» для отмены."
+                            )
+                            self.history.append(
+                                Message(
+                                    role="tool",
+                                    content=confirm_msg,
+                                    tool_call_id=call.id,
+                                    name=call.name,
+                                )
+                            )
+                            reply = self._chat(self._messages())
+                            self.history.append(reply)
+                            if not reply.tool_calls:
+                                self.save_session()
+                                return reply.content.strip() or confirm_msg
+                            continue
                     if self._on_tool_result is not None:
                         try:
                             self._on_tool_result(call.name, result)

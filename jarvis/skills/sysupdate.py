@@ -5,7 +5,7 @@ import platform
 import shutil
 import subprocess
 
-from .registry import Skill, object_schema
+from .registry import Skill, _confirm_handler, object_schema
 
 log = logging.getLogger(__name__)
 
@@ -112,7 +112,7 @@ def build_skills() -> list[Skill]:
             name="run_update",
             description="Запустить обновление системы (apt upgrade).",
             parameters=object_schema({}),
-            handler=run_update,
+            handler=_confirm_handler(run_update, 'Запустить обновление системы (apt upgrade)?'),
         ),
         Skill(
             name="pip_update",

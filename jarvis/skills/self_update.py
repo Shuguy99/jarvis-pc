@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import subprocess
 
-from .registry import Skill, object_schema
+from .registry import Skill, _confirm_handler, object_schema
 
 log = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ def current_version() -> str:
 def build_skills() -> list[Skill]:
     return [
         Skill(name="self_update", description="Обновить Jarvis из git (git pull).",
-              parameters=object_schema({}), handler=self_update),
+              parameters=object_schema({}), handler=_confirm_handler(self_update, 'Обновить Jarvis из git (git pull --rebase)?')),
         Skill(name="current_version", description="Текущая версия/коммит Jarvis.",
               parameters=object_schema({}), handler=current_version),
     ]

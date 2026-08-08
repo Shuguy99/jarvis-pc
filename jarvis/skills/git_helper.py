@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import subprocess
 
-from .registry import Skill, object_schema
+from .registry import Skill, _confirm_handler, object_schema
 
 log = logging.getLogger(__name__)
 
@@ -58,10 +58,10 @@ def build_skills() -> list[Skill]:
               handler=lambda cwd=".": git_status(cwd)),
         Skill(name="git_commit", description="git add -A + commit.",
               parameters=object_schema({"message": {"type": "string", "description": "Сообщение"}, "cwd": {"type": "string", "description": "Путь"}}, required=["message"]),
-              handler=lambda message, cwd=".": git_commit(message, cwd)),
+              handler=_confirm_handler(lambda message, cwd=".": git_commit(message, cwd), 'Закоммитить все изменения с сообщением "{message}" (git add -A + commit)?')),
         Skill(name="git_push", description="git push.",
               parameters=object_schema({"cwd": {"type": "string", "description": "Путь"}}),
-              handler=lambda cwd=".": git_push(cwd)),
+              handler=_confirm_handler(lambda cwd=".": git_push(cwd), 'Выполнить git push?')),
         Skill(name="git_log", description="Последние коммиты.",
               parameters=object_schema({"n": {"type": "integer", "description": "Количество"}}),
               handler=lambda n=5: git_log(n)),
