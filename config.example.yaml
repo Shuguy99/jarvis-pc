@@ -238,6 +238,9 @@ skills:
   #scenes:                                # автоматизации и сцены
   #  enabled: true
   #  scenes_file: "~/.jarvis/scenes.json"
+  #  # Поддерживает: переменные {{var}}, условия (gt/lt/regex/equals),
+  #  # циклы (repeat/loop), вложенные сцены, триггеры (cron + события),
+  #  # лог выполнения, event bus для межнавыкового взаимодействия
 
   #sounds:                                # звуковые эффекты
   #  enabled: false

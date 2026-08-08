@@ -45,6 +45,7 @@ class Services:
     pomodoro: PomodoroService | None = None
     alarm: AlarmService | None = None
     timer_skill: TimerSkillService | None = None
+    scene_runner: object | None = None
 
     def shutdown(self) -> None:
         """Освобождает ресурсы всех служб."""
@@ -54,6 +55,8 @@ class Services:
             self.alarm.shutdown()
         if self.timer_skill is not None:
             self.timer_skill.shutdown()
+        if self.scene_runner is not None:
+            self.scene_runner.stop()
 
 
 def build_registry(
@@ -177,10 +180,12 @@ def build_registry(
     if skills_config.rag.enabled:
         registry.extend(rag.build_skills(skills_config.rag)[0])
     # Сцены и автоматизации (нужен реестр)
+    scene_runner = None
     if skills_config.scenes.enabled:
         scene_runner = scenes_mod.SceneRunner(skills_config.scenes)
         scene_runner.set_registry(registry)
         registry.extend(scene_runner.build_skills())
+        scene_runner.start()
     # Пользовательские плагины (локальные + GitHub)
     from .plugins import load_plugins, build_plugin_skills
 
@@ -189,4 +194,8 @@ def build_registry(
         registry.extend(plugin_skills)
     # Навыки управления плагинами
     registry.extend(build_plugin_skills(config))
-    return registry, Services(timers, memory_store, browser_session, pomodoro_svc, alarm_svc, timer_skill_svc)
+    return registry, Services(
+        timers, memory_store, browser_session,
+        pomodoro_svc, alarm_svc, timer_skill_svc,
+        scene_runner=scene_runner,
+    )
