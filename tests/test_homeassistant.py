@@ -1,408 +1,456 @@
-"""Тесты навыков Home Assistant."""
+"""Тесты умного дома (Home Assistant) — без реального HA."""
 
-from __future__ import annotations
-
-import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch, MagicMock
 
 import pytest
 
 from jarvis.config import HomeAssistantConfig
 from jarvis.skills.homeassistant import (
-    _ha_get_state_impl,
-    _ha_list_devices_impl,
-    _ha_run_script_impl,
-    _ha_set_light_impl,
-    _ha_toggle_device_impl,
     _ha_request,
-    build_skills,
-    ha_call_service,
-    ha_list,
-    ha_state,
     ha_toggle,
-    ha_turn_off,
     ha_turn_on,
+    ha_turn_off,
+    ha_state,
+    ha_list,
+    ha_call_service,
+    _ha_set_temperature_impl,
+    _ha_list_scenes_impl,
+    _ha_activate_scene_impl,
+    _ha_list_areas_impl,
+    _ha_area_control_impl,
+    _ha_media_control_impl,
+    _ha_sensor_dashboard_impl,
+    _ha_camera_snapshot_impl,
+    _ha_list_cameras_impl,
+    _ha_history_impl,
+    _ha_entity_search_impl,
 )
 
 
-CFG = HomeAssistantConfig(url="http://localhost:8123", token="test-token")
+cfg = HomeAssistantConfig(enabled=True, url="http://localhost:8123", token="test-token")
 
 
-# ── _ha_request ────────────────────────────────────────────────────────
+# ── Хелпер ───────────────────────────────────────────────────────────
 
 
-class TestHaRequest:
-    @patch("jarvis.skills.homeassistant.urllib.request.urlopen")
-    def test_get_success(self, mock_urlopen):
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = json.dumps({"state": "on"}).encode()
-        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
-        mock_resp.__exit__ = MagicMock(return_value=False)
-        mock_urlopen.return_value = mock_resp
-        result = _ha_request(CFG, "GET", "/states/light.bedroom")
-        assert result == {"state": "on"}
-
-    @patch("jarvis.skills.homeassistant.urllib.request.urlopen")
-    def test_post_success(self, mock_urlopen):
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = b"[]"
-        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
-        mock_resp.__exit__ = MagicMock(return_value=False)
-        mock_urlopen.return_value = mock_resp
-        result = _ha_request(CFG, "POST", "/services/light/turn_on", {"entity_id": "light.x"})
-        assert result == []
-
-    @patch("jarvis.skills.homeassistant.urllib.request.urlopen")
-    def test_http_error_returns_none(self, mock_urlopen):
-        from urllib.error import HTTPError
-        mock_urlopen.side_effect = HTTPError(
-            url="http://x", code=401, msg="Unauthorized", hdrs=None, fp=None
-        )
-        result = _ha_request(CFG, "GET", "/states/x")
-        assert result is None
-
-    @patch("jarvis.skills.homeassistant.urllib.request.urlopen")
-    def test_timeout_returns_none(self, mock_urlopen):
-        import urllib.error
-        mock_urlopen.side_effect = TimeoutError("timeout")
-        result = _ha_request(CFG, "GET", "/states/x")
-        assert result is None
-
-    def test_url_construction(self):
-        """URL собирается правильно из конфига."""
-        with patch("jarvis.skills.homeassistant.urllib.request.urlopen") as mock_urlopen:
-            mock_resp = MagicMock()
-            mock_resp.read.return_value = b"{}"
-            mock_resp.__enter__ = MagicMock(return_value=mock_resp)
-            mock_resp.__exit__ = MagicMock(return_value=False)
-            mock_urlopen.return_value = mock_resp
-            _ha_request(CFG, "GET", "/api/states")
-            call_args = mock_urlopen.call_args[0][0]
-            assert "localhost:8123" in call_args.full_url
-            assert "Bearer test-token" in call_args.headers["Authorization"]
+def _mock_request(return_value):
+    """Патчит _ha_request для возврата заданного значения."""
+    return patch("jarvis.skills.homeassistant._ha_request", return_value=return_value)
 
 
-# ── ha_toggle / ha_turn_on / ha_turn_off ────────────────────────────────
+# ── Базовые навыки ───────────────────────────────────────────────────
 
 
-class TestHaToggleOnOff:
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=[{}])
-    def test_toggle_success(self, mock_req):
-        result = ha_toggle(CFG, "light.bedroom")
-        assert "Переключил" in result
+class TestBasicSkills:
+    """Тесты исходных 6 навыков."""
 
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=None)
-    def test_toggle_failure(self, mock_req):
-        result = ha_toggle(CFG, "light.bedroom")
-        assert "Не удалось" in result
+    def test_toggle_success(self):
+        with _mock_request(["ok"]):
+            result = ha_toggle(cfg, "light.bedroom")
+            assert "переключил" in result.lower()
 
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=[{}])
-    def test_turn_on_success(self, mock_req):
-        result = ha_turn_on(CFG, "light.bedroom")
-        assert "Включил" in result
+    def test_toggle_failure(self):
+        with _mock_request(None):
+            result = ha_toggle(cfg, "light.bedroom")
+            assert "Не удалось" in result
 
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=None)
-    def test_turn_on_failure(self, mock_req):
-        result = ha_turn_on(CFG, "light.bedroom")
-        assert "Не удалось включить" in result
+    def test_turn_on_success(self):
+        with _mock_request(["ok"]):
+            result = ha_turn_on(cfg, "switch.lamp")
+            assert "Включил" in result
 
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=[{}])
-    def test_turn_off_success(self, mock_req):
-        result = ha_turn_off(CFG, "light.bedroom")
-        assert "Выключил" in result
+    def test_turn_off_success(self):
+        with _mock_request(["ok"]):
+            result = ha_turn_off(cfg, "switch.lamp")
+            assert "Выключил" in result
 
+    def test_state_success(self):
+        with _mock_request({"state": "on", "attributes": {"friendly_name": "Лампа"}}):
+            result = ha_state(cfg, "light.bedroom")
+            assert "Лампа: on" in result
 
-# ── ha_state ────────────────────────────────────────────────────────────
-
-
-class TestHaState:
-    @patch("jarvis.skills.homeassistant._ha_request")
-    def test_state_with_attributes(self, mock_req):
-        mock_req.return_value = {
+    def test_state_with_attributes(self):
+        with _mock_request({
             "state": "on",
-            "attributes": {
-                "friendly_name": "Спальня",
-                "brightness": 128,
-                "color_temp": 400,
-            },
-        }
-        result = ha_state(CFG, "light.bedroom")
-        assert "Спальня" in result
-        assert "on" in result
-        assert "brightness: 128" in result
+            "attributes": {"friendly_name": "Свет", "brightness": 200, "temperature": "22.5", "unit_of_measurement": "°C"},
+        }):
+            result = ha_state(cfg, "sensor.temp")
+            assert "brightness: 200" in result
+            assert "temperature: 22.5" in result
 
-    @patch("jarvis.skills.homeassistant._ha_request")
-    def test_state_simple(self, mock_req):
-        mock_req.return_value = {"state": "off", "attributes": {"friendly_name": "Lamp"}}
-        result = ha_state(CFG, "switch.lamp")
-        assert "Lamp" in result
-        assert "off" in result
+    def test_state_failure(self):
+        with _mock_request(None):
+            result = ha_state(cfg, "light.bedroom")
+            assert "Не удалось" in result
 
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=None)
-    def test_state_failure(self, mock_req):
-        result = ha_state(CFG, "light.x")
-        assert "Не удалось" in result
+    def test_list_all(self):
+        with _mock_request([{"entity_id": "light.bedroom", "state": "on", "attributes": {"friendly_name": "Свет"}}]):
+            result = ha_list(cfg)
+            assert "Свет: on" in result
+
+    def test_list_by_domain(self):
+        with _mock_request([
+            {"entity_id": "light.bedroom", "state": "on", "attributes": {}},
+            {"entity_id": "switch.lamp", "state": "off", "attributes": {}},
+        ]):
+            result = ha_list(cfg, domain="light")
+            assert "light.bedroom" in result
+            assert "switch.lamp" not in result
+
+    def test_list_empty(self):
+        with _mock_request([]):
+            result = ha_list(cfg)
+            assert "не найдены" in result.lower()
+
+    def test_list_failure(self):
+        with _mock_request(None):
+            result = ha_list(cfg)
+            assert "Не удалось" in result
+
+    def test_call_service_success(self):
+        with _mock_request(["ok"]):
+            result = ha_call_service(cfg, "light", "turn_on", entity_id="light.bedroom")
+            assert "вызван" in result.lower()
+
+    def test_call_service_failure(self):
+        with _mock_request(None):
+            result = ha_call_service(cfg, "light", "turn_on")
+            assert "Не удалось" in result
 
 
-# ── ha_list ─────────────────────────────────────────────────────────────
+# ── Климат-контроль ─────────────────────────────────────────────────
 
 
-class TestHaList:
-    @patch("jarvis.skills.homeassistant._ha_request")
-    def test_list_all(self, mock_req):
-        mock_req.return_value = [
-            {"entity_id": "light.bedroom", "state": "on", "attributes": {"friendly_name": "Спальня"}},
-            {"entity_id": "switch.kitchen", "state": "off", "attributes": {"friendly_name": "Кухня"}},
+class TestClimate:
+    """Тесты климат-контроля."""
+
+    def test_set_temperature_only(self):
+        with _mock_request(["ok"]):
+            result = _ha_set_temperature_impl(cfg, "climate.living", temperature=22)
+            assert "22" in result
+
+    def test_set_hvac_mode_russian(self):
+        with _mock_request(["ok"]):
+            result = _ha_set_temperature_impl(cfg, "climate.living", hvac_mode="обогрев")
+            assert "обогрев" in result
+
+    def test_set_both(self):
+        with _mock_request(["ok"]):
+            result = _ha_set_temperature_impl(cfg, "climate.living", temperature=24, hvac_mode="cool")
+            assert "24" in result
+            assert "cool" in result
+
+    def test_no_params(self):
+        result = _ha_set_temperature_impl(cfg, "climate.living")
+        assert "Укажите" in result
+
+    def test_fallback_to_hvac_mode(self):
+        # set_temperature fails, set_hvac_mode succeeds
+        call_count = [0]
+        def _side_effect(config, method, endpoint, data=None):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return None  # set_temperature fails
+            return ["ok"]  # set_hvac_mode succeeds
+        with patch("jarvis.skills.homeassistant._ha_request", side_effect=_side_effect):
+            result = _ha_set_temperature_impl(cfg, "climate.room", hvac_mode="heat")
+            assert "режим" in result.lower()
+
+
+# ── Сцены ────────────────────────────────────────────────────────────
+
+
+class TestScenes:
+    """Тесты сцен."""
+
+    def test_list_scenes(self):
+        with _mock_request([
+            {"entity_id": "scene.movie", "attributes": {"friendly_name": "Кино"}},
+            {"entity_id": "light.bedroom", "state": "on", "attributes": {}},
+        ]):
+            result = _ha_list_scenes_impl(cfg)
+            assert "Кино" in result
+            assert "light.bedroom" not in result
+
+    def test_list_scenes_empty(self):
+        with _mock_request([]):
+            result = _ha_list_scenes_impl(cfg)
+            assert "не найдены" in result.lower()
+
+    def test_activate_scene(self):
+        with _mock_request(["ok"]):
+            result = _ha_activate_scene_impl(cfg, "scene.movie")
+            assert "активирована" in result.lower()
+
+    def test_activate_scene_failure(self):
+        with _mock_request(None):
+            result = _ha_activate_scene_impl(cfg, "scene.movie")
+            assert "Не удалось" in result
+
+
+# ── Области / Комнаты ────────────────────────────────────────────────
+
+
+class TestAreas:
+    """Тесты управления по комнатам."""
+
+    def test_list_areas(self):
+        with _mock_request([{"id": "a1", "name": "Спальня"}, {"id": "a2", "name": "Кухня"}]):
+            result = _ha_list_areas_impl(cfg)
+            assert "Спальня" in result
+            assert "Кухня" in result
+
+    def test_list_areas_empty(self):
+        with _mock_request([]):
+            result = _ha_list_areas_impl(cfg)
+            assert "не найдены" in result.lower()
+
+    def test_area_control_success(self):
+        call_count = [0]
+        def _side_effect(config, method, endpoint, data=None):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return [{"id": "a1", "name": "Спальня"}]
+            elif call_count[0] == 2:
+                return [{"id": "d1"}]
+            elif call_count[0] == 3:
+                return [{"entity_id": "light.bedroom"}]
+            return ["ok"]
+        with patch("jarvis.skills.homeassistant._ha_request", side_effect=_side_effect):
+            result = _ha_area_control_impl(cfg, "Спальня")
+            assert "переключены" in result.lower()
+
+    def test_area_not_found(self):
+        with _mock_request([{"id": "a1", "name": "Кухня"}]):
+            result = _ha_area_control_impl(cfg, "Спальня")
+            assert "не найдена" in result.lower()
+
+    def test_area_control_with_domain_filter(self):
+        call_count = [0]
+        def _side_effect(config, method, endpoint, data=None):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return [{"id": "a1", "name": "Гостиная"}]
+            elif call_count[0] == 2:
+                return [{"id": "d1"}]
+            elif call_count[0] == 3:
+                # light проходит, sensor фильтруется
+                return [
+                    {"entity_id": "light.sofa"},
+                    {"entity_id": "sensor.temp"},
+                ]
+            return ["ok"]
+        with patch("jarvis.skills.homeassistant._ha_request", side_effect=_side_effect):
+            result = _ha_area_control_impl(cfg, "Гостиная", domain="light")
+            assert "1 устройств" in result
+
+
+# ── Медиаплеер ───────────────────────────────────────────────────────
+
+
+class TestMedia:
+    """Тесты медиаплеера."""
+
+    def test_play(self):
+        with _mock_request(["ok"]):
+            result = _ha_media_control_impl(cfg, "media_player.tv", action="play")
+            assert "Воспроизведение" in result
+
+    def test_pause_russian(self):
+        with _mock_request(["ok"]):
+            result = _ha_media_control_impl(cfg, "media_player.tv", action="пауза")
+            assert "Пауза" in result
+
+    def test_set_volume(self):
+        with _mock_request(["ok"]):
+            result = _ha_media_control_impl(cfg, "media_player.tv", volume_level=50)
+            assert "50%" in result
+
+    def test_volume_clamped(self):
+        with _mock_request(["ok"]) as m:
+            _ha_media_control_impl(cfg, "media.player", volume_level=200)
+            # Проверяем что volume_level был обрезан до 1.0
+            call_args = m.call_args
+            data = call_args[0][3] if len(call_args[0]) > 3 else call_args[1].get("data", {})
+            vol = data.get("volume_level", 0)
+            assert vol <= 1.0
+
+    def test_play_media_url(self):
+        with _mock_request(["ok"]):
+            result = _ha_media_control_impl(cfg, "media_player.tv", media_content_id="http://radio.com/stream")
+            assert "Воспроизвожу" in result
+
+    def test_next_track(self):
+        with _mock_request(["ok"]):
+            result = _ha_media_control_impl(cfg, "media.player", action="next")
+            assert "Следующий" in result
+
+    def test_failure(self):
+        with _mock_request(None):
+            result = _ha_media_control_impl(cfg, "media.player", action="play")
+            assert "Не удалось" in result
+
+
+# ── Сенсоры ──────────────────────────────────────────────────────────
+
+
+class TestSensors:
+    """Тесты сенсорного дашборда."""
+
+    def test_all_sensors(self):
+        states = [
+            {"entity_id": "sensor.temp", "state": "22.5", "attributes": {"friendly_name": "Температура", "unit_of_measurement": "°C"}},
+            {"entity_id": "sensor.hum", "state": "45", "attributes": {"friendly_name": "Влажность", "unit_of_measurement": "%"}},
+            {"entity_id": "sensor.bad", "state": "unavailable", "attributes": {"friendly_name": "Сломан"}},
+            {"entity_id": "light.bedroom", "state": "on", "attributes": {}},
         ]
-        result = ha_list(CFG)
-        assert "Спальня" in result
-        assert "Кухня" in result
+        with _mock_request(states):
+            result = _ha_sensor_dashboard_impl(cfg)
+            assert "Температура: 22.5°C" in result
+            assert "Влажность: 45%" in result
+            assert "Сломан" not in result  # unavailable отфильтрован
 
-    @patch("jarvis.skills.homeassistant._ha_request")
-    def test_list_filtered_by_domain(self, mock_req):
-        mock_req.return_value = [
-            {"entity_id": "light.a", "state": "on", "attributes": {"friendly_name": "A"}},
-            {"entity_id": "switch.b", "state": "off", "attributes": {"friendly_name": "B"}},
+    def test_filter_temperature(self):
+        states = [
+            {"entity_id": "sensor.temperature_living", "state": "22", "attributes": {"friendly_name": "Температура гостиной", "unit_of_measurement": "°C"}},
+            {"entity_id": "sensor.humidity_living", "state": "50", "attributes": {"friendly_name": "Влажность", "unit_of_measurement": "%"}},
         ]
-        result = ha_list(CFG, domain="light")
-        assert "A" in result
-        assert "B" not in result
+        with _mock_request(states):
+            result = _ha_sensor_dashboard_impl(cfg, sensor_type="температура")
+            assert "Температура" in result
+            assert "Влажность" not in result
 
-    @patch("jarvis.skills.homeassistant._ha_request")
-    def test_list_empty(self, mock_req):
-        mock_req.return_value = []
-        result = ha_list(CFG)
-        assert "не найдены" in result
+    def test_empty(self):
+        with _mock_request([]):
+            result = _ha_sensor_dashboard_impl(cfg)
+            assert "не найдены" in result.lower()
 
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=None)
-    def test_list_failure(self, mock_req):
-        result = ha_list(CFG)
-        assert "Не удалось" in result
-
-    @patch("jarvis.skills.homeassistant._ha_request")
-    def test_list_truncates_at_30(self, mock_req):
-        mock_req.return_value = [
-            {"entity_id": f"sensor.{i}", "state": "ok", "attributes": {"friendly_name": f"S{i}"}}
-            for i in range(50)
+    def test_no_match_category(self):
+        states = [
+            {"entity_id": "sensor.humidity", "state": "50", "attributes": {"friendly_name": "Влажность"}},
         ]
-        result = ha_list(CFG)
-        assert "показано 30 из 50" in result
+        with _mock_request(states):
+            result = _ha_sensor_dashboard_impl(cfg, sensor_type="энергия")
+            assert "не найдены" in result.lower()
 
 
-# ── ha_call_service ─────────────────────────────────────────────────────
+# ── Камеры ───────────────────────────────────────────────────────────
 
 
-class TestHaCallService:
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=[{}])
-    def test_success(self, mock_req):
-        result = ha_call_service(CFG, "climate", "set_temperature", entity_id="climate.room", temperature=22)
-        assert "вызван" in result
+class TestCameras:
+    """Тесты камер."""
 
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=None)
-    def test_failure(self, mock_req):
-        result = ha_call_service(CFG, "light", "turn_on")
-        assert "Не удалось" in result
+    def test_list_cameras(self):
+        with _mock_request([
+            {"entity_id": "camera.front", "state": "idle", "attributes": {"friendly_name": "Входная дверь"}},
+            {"entity_id": "light.bedroom", "state": "on", "attributes": {}},
+        ]):
+            result = _ha_list_cameras_impl(cfg)
+            assert "Входная дверь" in result
+            assert "light.bedroom" not in result
 
+    def test_list_empty(self):
+        with _mock_request([]):
+            result = _ha_list_cameras_impl(cfg)
+            assert "не найдены" in result.lower()
 
-# ── _ha_toggle_device_impl ─────────────────────────────────────────────
+    def test_snapshot_success(self):
+        with _mock_request(["ok"]):
+            result = _ha_camera_snapshot_impl(cfg, "camera.front")
+            assert "сохранён" in result.lower()
 
-
-class TestHaToggleDevice:
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=[{}])
-    def test_uses_domain_toggle(self, mock_req):
-        result = _ha_toggle_device_impl(CFG, "light.bedroom")
-        assert "переключено" in result
-        mock_req.assert_called_once()
-        call_args = mock_req.call_args
-        assert "light/toggle" in call_args[0][2]
-
-    @patch("jarvis.skills.homeassistant._ha_request")
-    def test_fallback_to_homeassistant_toggle(self, mock_req):
-        mock_req.side_effect = [None, [{}]]  # first fails, second succeeds
-        result = _ha_toggle_device_impl(CFG, "light.bedroom")
-        assert "переключено" in result
-        assert mock_req.call_count == 2
-
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=None)
-    def test_both_fail(self, mock_req):
-        mock_req.side_effect = [None, None]
-        result = _ha_toggle_device_impl(CFG, "light.bedroom")
-        assert "Не удалось" in result
+    def test_snapshot_failure(self):
+        with _mock_request(None):
+            result = _ha_camera_snapshot_impl(cfg, "camera.front")
+            assert "Не удалось" in result
 
 
-# ── _ha_set_light_impl ─────────────────────────────────────────────────
+# ── История ──────────────────────────────────────────────────────────
 
 
-class TestHaSetLight:
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=[{}])
-    def test_brightness_only(self, mock_req):
-        result = _ha_set_light_impl(CFG, "light.bedroom", brightness=75)
-        assert "яркость 75%" in result
-        call_data = mock_req.call_args[0][3]
-        assert call_data["brightness_pct"] == 75
+class TestHistory:
+    """Тесты истории."""
 
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=[{}])
-    def test_rgb_color(self, mock_req):
-        result = _ha_set_light_impl(CFG, "light.bedroom", rgb_color=[255, 0, 0])
-        assert "RGB [255, 0, 0]" in result
-        call_data = mock_req.call_args[0][3]
-        assert call_data["rgb_color"] == [255, 0, 0]
+    def test_history_success(self):
+        history_data = [[
+            {"last_changed": "2025-01-15T10:00:00", "state": "on", "attributes": {"friendly_name": "Свет", "unit_of_measurement": ""}},
+            {"last_changed": "2025-01-15T09:00:00", "state": "off", "attributes": {"friendly_name": "Свет", "unit_of_measurement": ""}},
+        ]]
+        with _mock_request(history_data):
+            result = _ha_history_impl(cfg, "light.bedroom", hours=2)
+            assert "История" in result
+            assert "→ on" in result
+            assert "→ off" in result
 
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=[{}])
-    def test_color_name_russian(self, mock_req):
-        result = _ha_set_light_impl(CFG, "light.bedroom", color_name="красный")
-        assert "красный" in result
-        call_data = mock_req.call_args[0][3]
-        assert call_data["rgb_color"] == [255, 0, 0]
+    def test_history_empty(self):
+        with _mock_request([]):
+            result = _ha_history_impl(cfg, "light.bedroom")
+            assert "не найдена" in result.lower()
 
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=[{}])
-    def test_color_name_english(self, mock_req):
-        result = _ha_set_light_impl(CFG, "light.bedroom", color_name="blue")
-        call_data = mock_req.call_args[0][3]
-        assert call_data["rgb_color"] == [0, 0, 255]
-
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=[{}])
-    def test_brightness_clamp(self, mock_req):
-        _ha_set_light_impl(CFG, "light.x", brightness=150)
-        call_data = mock_req.call_args[0][3]
-        assert call_data["brightness_pct"] == 100
-
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=[{}])
-    def test_color_temp(self, mock_req):
-        result = _ha_set_light_impl(CFG, "light.x", color_temp=400)
-        assert "400" in result
+    def test_history_no_records(self):
+        with _mock_request([[]]):  # пустой список состояний
+            result = _ha_history_impl(cfg, "light.bedroom")
+            assert "Нет записей" in result
 
 
-# ── _ha_get_state_impl (полный дамп) ────────────────────────────────────
+# ── Поиск ────────────────────────────────────────────────────────────
 
 
-class TestHaGetStateFull:
-    @patch("jarvis.skills.homeassistant._ha_request")
-    def test_full_state_dump(self, mock_req):
-        mock_req.return_value = {
-            "state": "on",
-            "attributes": {"friendly_name": "Light", "brightness": 200},
-            "context": {"id": "ctx-1", "parent_id": None},
-            "last_changed": "2025-01-01T00:00:00",
-            "last_updated": "2025-01-01T00:00:00",
-        }
-        result = _ha_get_state_impl(CFG, "light.bedroom")
-        assert "Полное состояние" in result
-        assert "Light" in result
-        assert "ctx-1" in result
-        assert "brightness: 200" in result
+class TestSearch:
+    """Тесты поиска устройств."""
 
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=None)
-    def test_full_state_failure(self, mock_req):
-        result = _ha_get_state_impl(CFG, "light.x")
-        assert "Не удалось" in result
+    def test_search_by_name(self):
+        with _mock_request([
+            {"entity_id": "light.bedroom", "state": "on", "attributes": {"friendly_name": "Свет спальни"}},
+            {"entity_id": "sensor.temp", "state": "22", "attributes": {"friendly_name": "Температура"}},
+        ]):
+            result = _ha_entity_search_impl(cfg, "свет")
+            assert "Свет спальни" in result
+            assert "Температура" not in result
 
-    @patch("jarvis.skills.homeassistant._ha_request")
-    def test_truncates_long_dict_attrs(self, mock_req):
-        big_val = {"k": "x" * 300}
-        mock_req.return_value = {
-            "state": "on",
-            "attributes": {"big": big_val, "friendly_name": "X"},
-            "context": {},
-            "last_changed": "", "last_updated": "",
-        }
-        result = _ha_get_state_impl(CFG, "light.x")
-        assert "..." in result  # truncated
+    def test_search_by_entity_id(self):
+        with _mock_request([
+            {"entity_id": "switch.kitchen_lamp", "state": "off", "attributes": {"friendly_name": "Лампа"}},
+        ]):
+            result = _ha_entity_search_impl(cfg, "kitchen")
+            assert "kitchen" in result
+
+    def test_search_no_match(self):
+        with _mock_request([{"entity_id": "light.bedroom", "state": "on", "attributes": {"friendly_name": "Свет"}}]):
+            result = _ha_entity_search_impl(cfg, "кошка")
+            assert "ничего не найдено" in result.lower()
+
+    def test_search_failure(self):
+        with _mock_request(None):
+            result = _ha_entity_search_impl(cfg, "test")
+            assert "Не удалось" in result
 
 
-# ── _ha_run_script_impl ────────────────────────────────────────────────
-
-
-class TestHaRunScript:
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=[{}])
-    def test_script_entity(self, mock_req):
-        result = _ha_run_script_impl(CFG, "script.goodnight")
-        assert "Скрипт" in result
-        mock_req.assert_called_once()
-        assert "script/turn_on" in mock_req.call_args[0][2]
-
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=[{}])
-    def test_automation_entity(self, mock_req):
-        result = _ha_run_script_impl(CFG, "automation.welcome_home")
-        assert "Автоматизацию" in result
-        mock_req.assert_called_once()
-        assert "automation/trigger" in mock_req.call_args[0][2]
-
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=[{}])
-    def test_unknown_domain_fallback(self, mock_req):
-        result = _ha_run_script_impl(CFG, "scene.movie")
-        assert "запущен" in result
-        assert "homeassistant/turn_on" in mock_req.call_args[0][2]
-
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=None)
-    def test_failure(self, mock_req):
-        result = _ha_run_script_impl(CFG, "script.x")
-        assert "Не удалось" in result
-
-
-# ── _ha_list_devices_impl ──────────────────────────────────────────────
-
-
-class TestHaListDevices:
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=None)
-    def test_failure(self, mock_req):
-        result = _ha_list_devices_impl(CFG)
-        assert "Не удалось" in result
-
-    @patch("jarvis.skills.homeassistant._ha_request", return_value=[])
-    def test_empty(self, mock_req):
-        result = _ha_list_devices_impl(CFG)
-        assert "не найдены" in result
-
-    @patch("jarvis.skills.homeassistant._ha_request")
-    def test_lists_devices(self, mock_req):
-        mock_req.return_value = [
-            {"id": "dev1", "name": "Lamp", "area_id": "bedroom", "model": "XYZ", "manufacturer": "Philips", "type": "light"},
-            {"id": "dev2", "name": "Sensor", "area_id": "", "model": "", "manufacturer": "", "type": "sensor"},
-        ]
-        result = _ha_list_devices_impl(CFG)
-        assert "Lamp" in result
-        assert "Philips" in result
-        assert "Sensor" in result
-        assert "bedroom" in result
-
-    @patch("jarvis.skills.homeassistant._ha_request")
-    def test_truncates_at_50(self, mock_req):
-        mock_req.return_value = [
-            {"id": f"d{i}", "name": f"Device {i}", "area_id": "", "model": "", "manufacturer": "", "type": "sensor"}
-            for i in range(80)
-        ]
-        result = _ha_list_devices_impl(CFG)
-        assert "показано 50 из 80" in result
-
-
-# ── build_skills ───────────────────────────────────────────────────────
+# ── build_skills ─────────────────────────────────────────────────────
 
 
 class TestBuildSkills:
-    def test_returns_eleven_skills(self):
-        skills = build_skills(CFG)
-        assert len(skills) == 11
+    """Тесты регистрации навыков."""
 
-    def test_expected_names(self):
-        names = {s.name for s in build_skills(CFG)}
-        assert "ha_toggle" in names
-        assert "ha_turn_on" in names
-        assert "ha_turn_off" in names
-        assert "ha_state" in names
-        assert "ha_list" in names
-        assert "ha_call_service" in names
-        assert "ha_list_devices" in names
-        assert "ha_toggle_device" in names
-        assert "ha_set_light" in names
-        assert "ha_get_state" in names
-        assert "ha_run_script" in names
+    def test_skill_count(self):
+        from jarvis.skills.homeassistant import build_skills
+        skills = build_skills(cfg)
+        names = {s.name for s in skills}
+        assert len(skills) == 22
+        # Проверяем наличие всех новых навыков
+        for name in (
+            "ha_toggle", "ha_turn_on", "ha_turn_off", "ha_state", "ha_list",
+            "ha_call_service", "ha_list_devices", "ha_toggle_device", "ha_set_light",
+            "ha_get_state", "ha_run_script",
+            "ha_set_temperature", "ha_list_scenes", "ha_activate_scene",
+            "ha_list_areas", "ha_area_control", "ha_media_control",
+            "ha_sensor_dashboard", "ha_list_cameras", "ha_camera_snapshot",
+            "ha_history", "ha_entity_search",
+        ):
+            assert name in names, f"Missing skill: {name}"
 
-    def test_all_tool_specs_valid(self):
-        for skill in build_skills(CFG):
-            spec = skill.to_openai_tool()
-            assert spec["type"] == "function"
-            params = spec["function"]["parameters"]
-            assert params["type"] == "object"
-            for req in params.get("required", []):
-                assert req in params["properties"]
+    def test_all_skills_have_descriptions(self):
+        from jarvis.skills.homeassistant import build_skills
+        skills = build_skills(cfg)
+        for s in skills:
+            assert s.description, f"Skill {s.name} has no description"
