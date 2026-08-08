@@ -1,7 +1,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white" alt="Python" />
   <img src="https://img.shields.io/badge/навыков-174-green" alt="Skills" />
-  <img src="https://img.shields.io/badge/тестов-290-brightgreen" alt="Tests" />
+  <img src="https://img.shields.io/badge/тестов-925-brightgreen" alt="Tests" />
   <img src="https://img.shields.io/badge/модулей-67-yellow" alt="Modules" />
   <img src="https://img.shields.io/badge/OS-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey" alt="Cross-platform" />
   <img src="https://img.shields.io/badge/License-MIT-orange" alt="License" />
@@ -17,6 +17,7 @@
 <p align="center">
   <a href="#быстрый-старт">Быстрый старт</a> &middot;
   <a href="#навыки">174 навыка</a> &middot;
+  <a href="#безопасность">Безопасность</a> &middot;
   <a href="#как-это-устроено">Архитектура</a> &middot;
   <a href="#разработка">Разработка</a>
 </p>
@@ -44,6 +45,7 @@ J.A.R.V.I.S.: Сэр, батарея разряжена до 15 проценто
 - **Расширяемый** — плагинная архитектура, написать навык = 10 строк кода
 - **Приватный** — данные в `~/.jarvis/`, наружу ничего не уходит без вашего разрешения
 - **С инициативой** — сам следит за батареей, CPU, RAM и предупреждает о проблемах
+- **Безопасный** — подтверждение опасных операций, защита путей, валидация URL, rate limiting
 
 ## Быстрый старт
 
@@ -262,6 +264,9 @@ Windows: `run.bat`, `run.bat text`, `run.bat doctor`
 | `wake_word.enabled` | `true` | Пробуждение по слову (нужен openwakeword) |
 | `monitor.enabled` | `true` | Фоновый мониторинг системы |
 | `skills.allow_shutdown` | `false` | Разрешить голосовое выключение ПК |
+| `rate_limit.enabled` | `true` | Rate limiting для внешних вызовов |
+| `rate_limit.per_second` | `1.0` | Минимальный интервал между вызовами (с) |
+| `rate_limit.burst` | `3` | Количество вызовов подряд без throttling |
 
 ### Алиасы
 
@@ -289,7 +294,7 @@ jarvis/
   cli.py            режимы voice / text / once / doctor / devices / setup
   config.py         YAML-конфиг с валидацией и ${ENV_VAR} подстановкой
   setup_wizard.py   интерактивный мастер настройки (6 шагов)
-tests/             290 тестов (pytest)
+tests/             925 тестов (pytest)
 ```
 
 ### Цикл обработки
@@ -312,6 +317,32 @@ tests/             290 тестов (pytest)
 - Питание: `shutdown` (Linux/macOS), `powershell` (Windows)
 - MPV IPC: UNIX socket (Linux/macOS), named pipe (Windows)
 
+## Безопасность
+
+### Подтверждение опасных операций
+
+Удаление файлов, закрытие приложений, git push/commit, системные обновления,
+перезагрузка и выключение — требуют подтверждения пользователя через LLM.
+При повторном вызове с теми же аргументами выполнение проходит без повторного вопроса.
+
+### Защита путей и URL
+
+- **Удаление** блокируется для `/`, `/home`, `%USERPROFILE%` и их подкаталогов
+- **URL** отклоняются если схема — `javascript:`, `file:`, `data:`
+- **Shell-команды** отклоняются при наличии `|`, `` ` ``, `;`, `$()``
+- **Выключение/перезагрузка** заблокированы пока явно не разрешены в конфиге
+
+### Rate limiting
+
+Внешние вызовы (веб-поиск, Telegram API, HTTP-запросы) ограничены
+token-bucket алгоритмом с настраиваемым `per_second` и `burst`.
+Каждая группа вызовов (например, `web_search`) имеет независимый bucket.
+
+### Логирование ошибок
+
+Все исключения логируются через `log.debug()` / `log.warning()` —
+никаких тихих `except Exception: pass`, которые скрывают баги.
+
 ## Приватность
 
 По умолчанию наружу не уходит ничего: пробуждение, распознавание и синтез
@@ -323,7 +354,7 @@ tests/             290 тестов (pytest)
 
 ```bash
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m pytest -q          # 290 тестов, ~2 сек
+.venv/bin/python -m pytest -q          # 925 тестов
 .venv/bin/ruff check .                # линтер
 .venv/bin/python -m jarvis doctor     # диагностика зависимостей
 ```
