@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
-import io
+
 import json
 import logging
 import math
@@ -238,6 +238,10 @@ def chunk_text(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
                 chunks.append(current.strip())
                 current = ""
             sentences = re.split(r"(?<=[.!?])\s+", para)
+            # Если предложений не найдено (нет пунктуации) — разбиваем по словам
+            if len(sentences) <= 1 and len(sentences[0]) > chunk_size:
+                chunks.extend(_split_by_words(para, chunk_size, chunk_overlap))
+                continue
             for sent in sentences:
                 sent = sent.strip()
                 if not sent:
@@ -268,6 +272,33 @@ def chunk_text(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
         chunks.append(current.strip())
 
     # Фильтр слишком коротких чанков (меньше 30 символов)
+    return [c for c in chunks if len(c) >= 30]
+
+
+def _split_by_words(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
+    """Разбивает текст по словам, когда нет пунктуации для разделения."""
+    words = text.split()
+    if not words:
+        return []
+    chunks: list[str] = []
+    current_words: list[str] = []
+    current_len = 0
+    for word in words:
+        word_len = len(word) + (1 if current_words else 0)  # +1 for space
+        if current_len + word_len > chunk_size and current_words:
+            chunks.append(" ".join(current_words))
+            # Overlap: keep last N words
+            if chunk_overlap > 0:
+                overlap_count = max(1, chunk_overlap // 4)
+                current_words = current_words[-overlap_count:]
+                current_len = sum(len(w) for w in current_words) + len(current_words) - 1
+            else:
+                current_words = []
+                current_len = 0
+        current_words.append(word)
+        current_len += word_len
+    if current_words:
+        chunks.append(" ".join(current_words))
     return [c for c in chunks if len(c) >= 30]
 
 
@@ -568,7 +599,7 @@ class ChromaRagStore:
             if existing and existing.get("ids"):
                 self._collection.delete(ids=existing["ids"])
         except Exception:
-            pass
+            log.warning("Ошибка удаления чанков %s из ChromaDB", source_id)
 
     def search(
         self, query: str, top_k: int,
@@ -596,7 +627,7 @@ class ChromaRagStore:
                 "filename": meta.get("filename", "?"),
                 "chunk_index": meta.get("chunk_index", 0),
                 "tags": [t.strip() for t in tags_str.split(",") if t.strip()],
-                "score": round(1 - dist, 3) if dist else 0,
+                "score": round(1 - dist, 3) if dist is not None else 0,
             })
         return results
 
