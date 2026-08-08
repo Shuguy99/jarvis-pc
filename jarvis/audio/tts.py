@@ -82,8 +82,12 @@ class Speaker:
                     future.result(timeout=30)
             except RuntimeError:
                 asyncio.run(synthesize())
-        except Exception:
-            log.exception("Edge TTS не смог синтезировать речь")
+        except Exception as exc:
+            # SSL/сетевые ошибки логируем тихо — это норма при отсутствии интернета.
+            if 'ssl' in str(exc).lower() or 'SSLError' in type(exc).__name__:
+                log.warning("Edge TTS недоступен (SSL/сеть): %s", exc)
+            else:
+                log.exception("Edge TTS не смог синтезировать речь")
             tmp.unlink(missing_ok=True)
             return False
         try:

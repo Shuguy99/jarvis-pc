@@ -90,10 +90,10 @@ class SpeechRecorder:
         """Создаёт webrtcvad, если он установлен."""
         try:
             import webrtcvad  # type: ignore[import-not-found]
-        except ImportError:
+            return webrtcvad.Vad(max(0, min(3, aggressiveness)))
+        except Exception:
             log.warning("webrtcvad не установлен, использую детектор по громкости")
             return None
-        return webrtcvad.Vad(max(0, min(3, aggressiveness)))
 
     def is_speech(self, frame: np.ndarray, sample_rate: int) -> bool:
         """Определяет, есть ли речь в кадре."""

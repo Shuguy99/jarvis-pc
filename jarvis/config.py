@@ -23,8 +23,8 @@ import yaml
 log = logging.getLogger(__name__)
 
 DEFAULT_CONFIG_PATHS = (
-    Path("config.yaml"),
     Path.home() / ".jarvis" / "config.yaml",
+    Path("config.yaml"),
 )
 
 T = TypeVar("T")
@@ -684,16 +684,25 @@ def _sanitize(cls: type[Any], data: Mapping[str, Any], prefix: str = "") -> dict
 
 
 def load_config(path: str | os.PathLike[str] | None = None) -> Config:
-    """Загружает конфигурацию из YAML-файла, возвращая значения по умолчанию."""
+    """Загружает конфигурацию из YAML-файла, возвращая значения по умолчанию.
+
+    Приоритет: явный --config > ~/.jarvis/config.yaml > ./config.yaml > дефолты.
+    """
     candidates = [Path(path)] if path else list(DEFAULT_CONFIG_PATHS)
+    loaded_from: Path | None = None
     for candidate in candidates:
         if candidate.is_file():
-            raw = yaml.safe_load(candidate.read_text(encoding="utf-8")) or {}
-            if not isinstance(raw, Mapping):
-                raise ValueError(f"Некорректный конфиг: {candidate}")
-            _warn_unknown(Config, raw)
-            sanitized = _sanitize(Config, raw)
-            return _build(Config, sanitized)
+            loaded_from = candidate
+            break
+    if loaded_from is not None:
+        raw = yaml.safe_load(loaded_from.read_text(encoding="utf-8")) or {}
+        if not isinstance(raw, Mapping):
+            raise ValueError(f"Некорректный конфиг: {loaded_from}")
+        _warn_unknown(Config, raw)
+        sanitized = _sanitize(Config, raw)
+        log.debug("Конфиг загружен: %s", loaded_from)
+        return _build(Config, sanitized)
+    log.debug("Конфиг не найден, используются значения по умолчанию")
     return Config()
 
 

@@ -97,7 +97,7 @@ def _check_module(name: str) -> bool:
     try:
         __import__(name)
         return True
-    except ImportError:
+    except Exception:
         return False
 
 
