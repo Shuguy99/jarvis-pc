@@ -1,49 +1,49 @@
-# Ядро: нужно всегда
+# Core: always required
 numpy==2.5.1
 PyYAML==6.0.3
 requests==2.34.2
 
-# Аудио: захват микрофона, детектор речи, распознавание
+# Audio: microphone capture, voice activity detection, speech recognition
 sounddevice==0.5.5
 webrtcvad==2.0.10
 faster-whisper==1.2.1
 openwakeword==0.6.0
 
-# Синтез речи
+# Text-to-speech
 pyttsx3==2.99
 edge-tts==7.2.8
 playsound3==3.3.2
 
-# Интерфейс
+# UI
 PySide6==6.11.1
 
-# Навыки
+# Skills
 psutil==7.2.2
 mss==10.2.0
 pyperclip==1.11.0
 
-# Зрение: снимки экрана и OCR (нужен установленный Tesseract OCR)
+# Vision: screenshots and OCR (requires Tesseract OCR installed)
 pillow==12.3.0
 pytesseract==0.3.13
 
-# Камера и распознавание лиц (нужен CMake + компилятор C++ для dlib)
-# Раскомментируйте если используете навыки: добавь лицо, кто перед камерой
+# Camera and face recognition (needs CMake + C++ compiler for dlib)
+# Uncomment if you use skills: add face, who is in front of camera
 # opencv-python==4.11.0.86
 # face_recognition==1.3.0
 
-# Долговременная память с семантическим поиском
+# Long-term memory with semantic search
 chromadb==1.5.9
 
-# Автоматизация браузера (после установки: playwright install chromium)
+# Browser automation (after install: playwright install chromium)
 playwright==1.61.0
 
-# Управление Spotify (нужны SPOTIFY_CLIENT_ID и SPOTIFY_CLIENT_SECRET)
+# Spotify control (needs SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET)
 spotipy==2.26.0
 
-# Облачный мозг (не нужен при backend: ollama)
+# Cloud brain (not needed when backend: ollama)
 openai==2.51.0
 
-# Только Windows: окна и точное управление громкостью
+# Windows only: window management and precise volume control
 pygetwindow==0.0.9; sys_platform == "win32"
 pycaw==20251023; sys_platform == "win32"
 comtypes==1.4.16; sys_platform == "win32"
