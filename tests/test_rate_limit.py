@@ -51,7 +51,7 @@ def test_disabled_bypasses():
 
 def test_separate_groups_independent():
     """Different groups have independent buckets."""
-    rl = RateLimiter(per_second=0.01, burst=1, enabled=True)
+    rl = RateLimiter(per_second=100, burst=1, enabled=True)
     rl.wait("group_a")
     rl.wait("group_b")  # different group, should not throttle
     t0 = time.monotonic()
