@@ -1,0 +1,8 @@
+Metadata-Version: 2.4
+Name: jarvis-assistant
+Version: 0.1.0
+Summary: Голосовой ассистент Джарвис для ПК
+Requires-Python: >=3.10
+Requires-Dist: numpy
+Requires-Dist: PyYAML
+Requires-Dist: requests
