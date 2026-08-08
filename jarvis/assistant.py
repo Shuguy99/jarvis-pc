@@ -15,6 +15,7 @@ from .audio.hotkey import HotkeyListener
 from .brain import Brain, build_brain
 from .config import Config
 from .monitor import SystemMonitor
+from .profiles import ProfileManager
 from .skills import Services, SkillRegistry, build_registry
 
 log = logging.getLogger(__name__)
@@ -48,13 +49,15 @@ class Assistant:
     def __init__(self, config: Config, sink: EventSink | None = None) -> None:
         self.config = config
         self._sink = sink or (lambda event: None)
-        # Инициализируем менеджер профилей из конфига.
-        from .skills.personality import get_manager
-        get_manager(config.brain.profile)
+        # Профили: создаём менеджер и применяем текущий профиль
+        self.profiles = ProfileManager(
+            custom_profiles=config.skills.profiles.custom if config.skills.profiles.enabled else None,
+        )
+        self._apply_profile(self.profiles.current)
         self.speaker = Speaker(config.tts)
         self.skills: SkillRegistry
         self.services: Services
-        self.skills, self.services = build_registry(config, self._announce)
+        self.skills, self.services = build_registry(config, self._announce, self.profiles)
         self.monitor = SystemMonitor(config.monitor, self._announce)
         self.brain: Brain = build_brain(config, self.skills, on_tool_result=self._on_tool_result)
         self.brain.load_session()
@@ -66,9 +69,10 @@ class Assistant:
         self._busy = threading.RLock()
         self._hotkey = HotkeyListener(config.hotkey, self.push_to_talk)
         log.info(
-            "Мозг: %s, навыков: %d, акустическое пробуждение: %s",
+            "Мозг: %s, навыков: %d, профиль: %s, акустическое пробуждение: %s",
             type(self.brain).__name__,
             len(self.skills),
+            self.profiles.current.name,
             "да" if self.wake_word.available else "нет",
         )
 
@@ -174,11 +178,8 @@ class Assistant:
             self._announce(f"Не могу получить доступ к микрофону: {exc}")
             return
         with mic:
-            from .skills.personality import get_profile_greeting
-            greeting = config.greeting
-            if not greeting or greeting == "Все системы в норме, сэр.":
-                greeting = get_profile_greeting()
-            self._announce(greeting)
+            self._try_face_greeting()
+            self._announce(self.config.greeting)
             acoustic = self.wake_word.available and self.config.wake_word.enabled
             preroll: list[np.ndarray] = []
             self._emit(State.IDLE)
@@ -211,6 +212,58 @@ class Assistant:
                 except Exception:
                     log.exception("Ошибка в голосовом цикле, продолжаю слушать")
                     self._emit(State.IDLE)
+
+    def _apply_profile(self, profile) -> None:
+        """Применяет профиль к конфигу: промпт, TTS, приветствие."""
+        self.config.brain.system_prompt = profile.system_prompt
+        self.config.greeting = profile.greeting
+        # Обновляем TTS-настройки из профиля
+        self.config.tts.engine = profile.engine
+        self.config.tts.edge_voice = profile.edge_voice
+        if profile.voice:
+            self.config.tts.voice = profile.voice
+        self.config.tts.rate = profile.rate
+        self.config.tts.volume = profile.volume
+        # Пересоздаём Speaker с новыми настройками, если уже существует
+        if hasattr(self, 'speaker') and self.speaker is not None:
+            self.speaker.config = self.config.tts
+            self.speaker._engine = None  # сбрасываем кэш движка TTS
+        log.info("Профиль применён: %s (%s)", profile.name, profile.id)
+
+    def _try_face_greeting(self) -> None:
+        """Если включены лица и лицо распознано — переключает профиль и меняет приветствие."""
+        face_cfg = self.config.skills.face
+        if not face_cfg.enabled:
+            return
+        try:
+            from .face_db import recognize_face, get_face_profile
+            name, distance = recognize_face(face_cfg.camera_index, face_cfg.tolerance)
+            if name is None:
+                return
+            log.info("Лицо распознано: %s (dist=%.3f)", name, distance)
+            # Проверяем привязку профиля
+            if face_cfg.auto_switch_profile:
+                profile_id = get_face_profile(name)
+                if profile_id and profile_id != self.profiles.current_id:
+                    ok, _ = self.profiles.switch(profile_id)
+                    if ok:
+                        self._apply_profile(self.profiles.current)
+                        self.brain.reset()
+            # Меняем приветствие на персональное
+            if face_cfg.auto_greeting:
+                self.config.greeting = f"Добрый день, {name}."
+        except Exception:
+            # Распознавание лиц — не критично, не должно ломать запуск
+            log.debug("Автоматическое распознавание лиц недоступно")
+
+    def switch_profile(self, profile_id: str) -> str:
+        """Переключает профиль и перезагружает системный промпт мозга."""
+        ok, msg = self.profiles.switch(profile_id)
+        if ok:
+            self._apply_profile(self.profiles.current)
+            # Очищаем историю, чтобы новый промпт вступил в силу
+            self.brain.reset()
+        return msg
 
     def push_to_talk(self) -> None:
         """Одна реплика по горячей клавише, без ключевого слова."""

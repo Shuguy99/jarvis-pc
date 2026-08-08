@@ -404,11 +404,22 @@ class YouTubeConfig:
 
 @dataclass
 class FaceConfig:
-    """Распознавание лиц через OpenCV."""
+    """Распознавание лиц через face_recognition + OpenCV."""
 
     enabled: bool = False
     camera_index: int = 0
     photo_dir: str = "~/Pictures/Jarvis"
+    tolerance: float = 0.5          # 0.0=строгий, 0.6=мягкий порог распознавания
+    auto_greeting: bool = True     # Приветствовать по имени при запуске
+    auto_switch_profile: bool = True  # Переключать профиль по лицу
+
+
+@dataclass
+class ProfilesConfig:
+    """Голосовые профили — разные личности Джарвиса."""
+
+    enabled: bool = True
+    custom: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass
@@ -421,6 +432,7 @@ class SkillsConfig:
     search_engine: str = "https://duckduckgo.com/?q={query}"
     apps: dict[str, str] = field(default_factory=dict)
     aliases: dict[str, str] = field(default_factory=dict)
+    profiles: ProfilesConfig = field(default_factory=ProfilesConfig)
     vision: VisionConfig = field(default_factory=VisionConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     browser: BrowserConfig = field(default_factory=BrowserConfig)

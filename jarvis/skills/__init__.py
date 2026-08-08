@@ -6,16 +6,17 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from ..config import Config
+from ..profiles import ProfileManager
 from . import (
     alarm, agenda, apps, battery, bluetooth, brightness, browser, calculator, calendar,
     clipboard, code_snippets, crypto, currency, desktop_notify as desktop_notify_mod,
     dictaphone, disk, email, env, expenses, face, files, git_helper, github,
     habits, homeassistant, image_gen, macros, memory, music_recognition, network,
-    news, notion_tasks, notes, password_gen, passwords, personal, personality, pomodoro,
-    processes, qr, radio, screenshot_save, self_update, sounds, spotify, system,
-    sysupdate, telegram_bot, timer_skill, translator, unit_converter, vision, vpn,
-    volume, weather, weather_alert, web, wifi, windows_manager, youtube,
-    youtube_music, telegram_chat, rag, scenes,
+    news, notion_tasks, notes, password_gen, passwords, personal, pomodoro,
+    processes, profiles as profiles_skill, qr, radio, screenshot_save, self_update,
+    sounds, spotify, system, sysupdate, telegram_bot, timer_skill, translator,
+    unit_converter, vision, vpn, volume, weather, weather_alert, web, wifi,
+    windows_manager, youtube, youtube_music,
 )
 from .alarm import AlarmService
 from .browser import BrowserSession
@@ -55,7 +56,11 @@ class Services:
             self.timer_skill.shutdown()
 
 
-def build_registry(config: Config, notify: Callable[[str], None]) -> tuple[SkillRegistry, Services]:
+def build_registry(
+    config: Config,
+    notify: Callable[[str], None],
+    profile_manager: ProfileManager | None = None,
+) -> tuple[SkillRegistry, Services]:
     """Создаёт реестр всех навыков и связанные с ними службы."""
     skills_config = config.skills
     timers = TimerService(notify)
@@ -162,13 +167,9 @@ def build_registry(config: Config, notify: Callable[[str], None]) -> tuple[Skill
     registry.extend(screenshot_save.build_skills(skills_config.screenshot_dir))
     registry.extend(dictaphone.build_skills(config.mic))
     registry.extend(youtube_music.build_skills())
-    registry.extend(personality.build_skills())
-    # Сцены (нужен registry для вызова других навыков)
-    registry.extend(scenes.build_skills(registry))
-    # Telegram двухсторонний
-    registry.extend(telegram_chat.build_skills())
-    # RAG
-    registry.extend(rag.build_skills())
+    # Голосовые профили
+    if skills_config.profiles.enabled and profile_manager is not None:
+        registry.extend(profiles_skill._build_skills(profile_manager))
     # Пользовательские плагины
     from .plugins import load_plugins
 

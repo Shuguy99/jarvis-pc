@@ -42,6 +42,24 @@ stt:                                      # распознавание (faster-w
 #  silence_ms: 800                       # пауза = конец фразы
 #  max_utterance_s: 15.0
 
+# ─── Голосовые профили ────────────────────────────────────────────
+# Встроенные: default, casual, strict, pirate
+# Переключение голосом: «Джарвис, переключи профиль на casual»
+
+#profiles:                               # настройка профилей (раскомментируйте чтобы менять)
+#  enabled: true
+#  custom:                              # свои профили (переопределяют встроенные по ID)
+#    my_profile:
+#      name: "Мой Джарвис"
+#      description: "Описание профиля"
+#      system_prompt: "Ты — ИИ-ассистент..."
+#      greeting: "Привет!"
+#      address: "босс"
+#      tts:
+#        engine: edge
+#        edge_voice: ru-RU-DmitryNeural
+#        rate: 200
+
 # ─── Мозг (LLM) ──────────────────────────────────────────────────
 
 brain:
@@ -203,7 +221,11 @@ skills:
   #  enabled: false
 
   #face:                                  # распознавание лиц
-  #  enabled: false
+  #  enabled: false                      # pip install opencv-python face_recognition
+  #  camera_index: 0
+  #  tolerance: 0.5                      # 0.0=строгий, 0.6=мягкий
+  #  auto_greeting: true                 # "Добрый день, Иван!"
+  #  auto_switch_profile: true           # профиль по лицу
 
   #sounds:                                # звуковые эффекты
   #  enabled: false
