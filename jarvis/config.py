@@ -423,6 +423,15 @@ class ProfilesConfig:
 
 
 @dataclass
+class PluginStoreConfig:
+    """Магазин плагинов: поиск и установка из GitHub."""
+
+    enabled: bool = True
+    topic: str = "jarvis-skill"    # GitHub topic для поиска плагинов
+    token: str = ""              # GITHUB_TOKEN (для повышенных лимитов)
+
+
+@dataclass
 class SkillsConfig:
     """Настройки навыков."""
 
@@ -433,6 +442,7 @@ class SkillsConfig:
     apps: dict[str, str] = field(default_factory=dict)
     aliases: dict[str, str] = field(default_factory=dict)
     profiles: ProfilesConfig = field(default_factory=ProfilesConfig)
+    plugin_store: PluginStoreConfig = field(default_factory=PluginStoreConfig)
     vision: VisionConfig = field(default_factory=VisionConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     browser: BrowserConfig = field(default_factory=BrowserConfig)

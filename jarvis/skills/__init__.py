@@ -12,7 +12,7 @@ from . import (
     clipboard, code_snippets, crypto, currency, desktop_notify as desktop_notify_mod,
     dictaphone, disk, email, env, expenses, face, files, git_helper, github,
     habits, homeassistant, image_gen, macros, memory, music_recognition, network,
-    news, notion_tasks, notes, password_gen, passwords, personal, pomodoro,
+    news, notion_tasks, notes, password_gen, passwords, personal, plugin_store, pomodoro,
     processes, profiles as profiles_skill, qr, radio, screenshot_save, self_update,
     sounds, spotify, system, sysupdate, telegram_bot, timer_skill, translator,
     unit_converter, vision, vpn, volume, weather, weather_alert, web, wifi,
@@ -170,6 +170,9 @@ def build_registry(
     # Голосовые профили
     if skills_config.profiles.enabled and profile_manager is not None:
         registry.extend(profiles_skill._build_skills(profile_manager))
+    # Магазин плагинов (GitHub)
+    if skills_config.plugin_store.enabled:
+        registry.extend(plugin_store.build_skills(skills_config.plugin_store))
     # Пользовательские плагины (локальные + GitHub)
     from .plugins import load_plugins, build_plugin_skills
 

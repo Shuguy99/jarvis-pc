@@ -227,6 +227,11 @@ skills:
   #  auto_greeting: true                 # "Добрый день, Иван!"
   #  auto_switch_profile: true           # профиль по лицу
 
+  #plugin_store:                          # магазин плагинов из GitHub
+  #  enabled: true
+  #  topic: jarvis-skill                 # GitHub topic для поиска
+  #  token: "${GITHUB_TOKEN}"
+
   #sounds:                                # звуковые эффекты
   #  enabled: false
 
