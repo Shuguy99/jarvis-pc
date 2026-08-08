@@ -435,6 +435,18 @@ class PluginStoreConfig:
 
 
 @dataclass
+class RagConfig:
+    """RAG: загрузка документов и поиск по ним."""
+
+    enabled: bool = True
+    documents_dir: str = "~/.jarvis/documents"
+    chunk_size: int = 500
+    chunk_overlap: int = 100
+    top_k: int = 5
+    backend: str = "auto"           # auto | chroma | json
+
+
+@dataclass
 class ScenesConfig:
     """Автоматизации и сцены: последовательности вызова навыков."""
 
@@ -454,6 +466,7 @@ class SkillsConfig:
     aliases: dict[str, str] = field(default_factory=dict)
     profiles: ProfilesConfig = field(default_factory=ProfilesConfig)
     plugin_store: PluginStoreConfig = field(default_factory=PluginStoreConfig)
+    rag: RagConfig = field(default_factory=RagConfig)
     scenes: ScenesConfig = field(default_factory=ScenesConfig)
     vision: VisionConfig = field(default_factory=VisionConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
