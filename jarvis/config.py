@@ -435,6 +435,14 @@ class PluginStoreConfig:
 
 
 @dataclass
+class ScenesConfig:
+    """Автоматизации и сцены: последовательности вызова навыков."""
+
+    enabled: bool = True
+    scenes_file: str = "~/.jarvis/scenes.json"  # пользовательские сцены
+
+
+@dataclass
 class SkillsConfig:
     """Настройки навыков."""
 
@@ -446,6 +454,7 @@ class SkillsConfig:
     aliases: dict[str, str] = field(default_factory=dict)
     profiles: ProfilesConfig = field(default_factory=ProfilesConfig)
     plugin_store: PluginStoreConfig = field(default_factory=PluginStoreConfig)
+    scenes: ScenesConfig = field(default_factory=ScenesConfig)
     vision: VisionConfig = field(default_factory=VisionConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     browser: BrowserConfig = field(default_factory=BrowserConfig)

@@ -13,7 +13,7 @@ from . import (
     dictaphone, disk, email, env, expenses, face, files, git_helper, github,
     habits, homeassistant, image_gen, macros, memory, music_recognition, network,
     news, notion_tasks, notes, password_gen, passwords, personal, plugin_store, pomodoro,
-    processes, profiles as profiles_skill, qr, radio, screenshot_save, self_update,
+    processes, profiles as profiles_skill, qr, radio, scenes as scenes_mod, screenshot_save, self_update,
     sounds, spotify, system, sysupdate, telegram_bot, timer_skill, translator,
     unit_converter, vision, vpn, volume, weather, weather_alert, web, wifi,
     windows_manager, youtube, youtube_music,
@@ -173,6 +173,11 @@ def build_registry(
     # Магазин плагинов (GitHub)
     if skills_config.plugin_store.enabled:
         registry.extend(plugin_store.build_skills(skills_config.plugin_store))
+    # Сцены и автоматизации (нужен реестр)
+    if skills_config.scenes.enabled:
+        scene_runner = scenes_mod.SceneRunner(skills_config.scenes)
+        scene_runner.set_registry(registry)
+        registry.extend(scene_runner.build_skills())
     # Пользовательские плагины (локальные + GitHub)
     from .plugins import load_plugins, build_plugin_skills
 

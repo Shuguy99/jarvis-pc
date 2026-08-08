@@ -235,6 +235,10 @@ skills:
   #  topic: jarvis-skill                 # GitHub topic для поиска
   #  token: "${GITHUB_TOKEN}"
 
+  #scenes:                                # автоматизации и сцены
+  #  enabled: true
+  #  scenes_file: "~/.jarvis/scenes.json"
+
   #sounds:                                # звуковые эффекты
   #  enabled: false
 
