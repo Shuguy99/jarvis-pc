@@ -444,6 +444,7 @@ class RagConfig:
     chunk_overlap: int = 100
     top_k: int = 5
     backend: str = "auto"           # auto | chroma | json
+    auto_ingest: bool = True       # загружать documents_dir при старте
 
 
 @dataclass

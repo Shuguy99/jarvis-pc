@@ -242,6 +242,16 @@ skills:
   #  # циклы (repeat/loop), вложенные сцены, триггеры (cron + события),
   #  # лог выполнения, event bus для межнавыкового взаимодействия
 
+  #rag:                                    # RAG: база документов
+  #  enabled: true
+  #  documents_dir: "~/.jarvis/documents"
+  #  chunk_size: 500
+  #  chunk_overlap: 100
+  #  top_k: 5
+  #  auto_ingest: true              # загружать документы при старте
+  #  # Поддерживает: TXT, MD, PDF, DOCX, HTML, CSV
+  #  # BM25 ранжирование, теги, фильтрация, загрузка URL
+
   #sounds:                                # звуковые эффекты
   #  enabled: false
 
