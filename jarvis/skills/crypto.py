@@ -6,6 +6,7 @@ import json
 import logging
 import urllib.request
 
+from ..rate_limit import rate_limiter
 from .registry import Skill, object_schema
 
 log = logging.getLogger(__name__)
@@ -13,6 +14,7 @@ _API = "https://api.coingecko.com/api/v3"
 
 
 def _fetch(path: str) -> dict:
+    rate_limiter.wait("crypto")
     url = f"{_API}{path}"
     req = urllib.request.Request(url, headers={"User-Agent": "Jarvis/1.0"})
     with urllib.request.urlopen(req, timeout=15) as resp:
@@ -46,6 +48,7 @@ def crypto_list(top: int = 10) -> str:
 
 
 def stock_price(symbol: str = "AAPL") -> str:
+    rate_limiter.wait("crypto")
     try:
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol.upper()}?range=1d&interval=1d"
         req = urllib.request.Request(url, headers={"User-Agent": "Jarvis/1.0"})

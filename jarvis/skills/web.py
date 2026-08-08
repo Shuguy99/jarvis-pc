@@ -7,6 +7,7 @@ import webbrowser
 from typing import Any
 
 from ..config import SkillsConfig
+from ..rate_limit import rate_limiter
 from .registry import Skill, object_schema
 
 HTTP_TIMEOUT_S = 10
@@ -32,6 +33,7 @@ def _fetch_ddg_results(query: str) -> list[dict[str, str]]:
         import requests  # type: ignore[import-not-found]
     except ImportError:
         return []
+    rate_limiter.wait("web_search")
     try:
         resp = requests.get(
             DDG_LITE_URL,

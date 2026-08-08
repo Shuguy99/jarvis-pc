@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..config import CurrencyConfig
+from ..rate_limit import rate_limiter
 from .registry import Skill, object_schema
 
 log = logging.getLogger(__name__)
@@ -54,6 +55,7 @@ def _fetch_rates(base: str = "USD") -> dict[str, float] | None:
             return cached
         url = _API_URL.format(base="USD")
 
+    rate_limiter.wait("currency")
     req = urllib.request.Request(url, headers={"User-Agent": "JarvisAssistant/1.0"})
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:

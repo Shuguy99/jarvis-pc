@@ -10,6 +10,7 @@ import urllib.parse
 from typing import Any
 
 from ..config import WeatherConfig
+from ..rate_limit import rate_limiter
 from .registry import Skill, object_schema
 
 log = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ def _wind_direction(deg: float) -> str:
 
 def _wttr_request(location: str, format_str: str) -> str:
     """Запрос к wttr.in. Возвращает текст ответа или пустую строку."""
+    rate_limiter.wait("weather")
     try:
         url = f"https://wttr.in/{urllib.parse.quote(location)}?format={format_str}&lang=ru"
         req = urllib.request.Request(url, headers={"User-Agent": "curl/7.68"})
@@ -47,6 +49,7 @@ def _wttr_request(location: str, format_str: str) -> str:
 
 def _owm_request(api_key: str, endpoint: str, params: dict[str, str]) -> dict[str, Any] | None:
     """Запрос к OpenWeatherMap API. Возвращает JSON или None."""
+    rate_limiter.wait("weather")
     try:
         params["appid"] = api_key
         params["lang"] = "ru"

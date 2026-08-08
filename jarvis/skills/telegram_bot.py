@@ -44,6 +44,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import TelegramConfig
+from ..rate_limit import rate_limiter
 from .registry import Skill, object_schema
 
 log = logging.getLogger(__name__)
@@ -61,6 +62,7 @@ def _tg_request(config: TelegramConfig, method: str, data: dict | None = None) -
         url, data=payload,
         headers={"Content-Type": "application/json"},
     )
+    rate_limiter.wait("telegram_api")
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             result = json.loads(resp.read().decode("utf-8"))
