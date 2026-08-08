@@ -83,6 +83,17 @@ class Brain(ABC):
             self._delete_session()
 
     @staticmethod
+    def _hydrate_message(item: dict) -> Message:
+        """Восстанавливает Message из JSON, конвертируя tool_calls dicts → ToolCall."""
+        item = {k: v for k, v in item.items() if k in Message.__dataclass_fields__}
+        if "tool_calls" in item and isinstance(item["tool_calls"], list):
+            item["tool_calls"] = [
+                ToolCall(**tc) if isinstance(tc, dict) else tc
+                for tc in item["tool_calls"]
+            ]
+        return Message(**item)
+
+    @staticmethod
     def _session_path(name: str = "") -> Path:
         """Возвращает путь к файлу сессии."""
         safe_name = "".join(ch for ch in name if ch.isalnum() or ch in "-_") if name else ""
@@ -128,7 +139,7 @@ class Brain(ABC):
                 return
             with self._lock:
                 self.history = [
-                    Message(**{k: v for k, v in item.items() if k in Message.__dataclass_fields__})
+                    self._hydrate_message(item)
                     for item in data
                     if isinstance(item, dict) and item.get("role") in ("user", "assistant", "tool")
                 ]
