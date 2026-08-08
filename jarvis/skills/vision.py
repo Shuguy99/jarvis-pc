@@ -15,7 +15,7 @@ try:
     import requests
 except ImportError:
     requests = None  # type: ignore[assignment, misc]
-from .personal import write_clipboard
+from .clipboard import set_clipboard as write_clipboard
 from .registry import Skill, object_schema
 
 log = logging.getLogger(__name__)

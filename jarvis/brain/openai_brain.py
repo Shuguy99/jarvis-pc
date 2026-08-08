@@ -58,7 +58,7 @@ class OpenAIBrain(Brain):
         response = self._client.chat.completions.create(
             model=self.config.openai_model,
             messages=[_serialize(message) for message in messages],
-            tools=self.skills.tool_specs(),
+            tools=self.skills.filtered_tool_specs(self._last_query),
             temperature=self.config.temperature,
         )
         choice = response.choices[0].message

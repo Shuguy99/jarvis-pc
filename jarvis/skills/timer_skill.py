@@ -57,15 +57,6 @@ class TimerSkillService:
 
 
 def build_skills(service: TimerSkillService) -> list[Skill]:
-    return [
-        Skill(name="timer_set", description="Поставить таймер (секунды).",
-              parameters=object_schema({
-                  "seconds": {"type": "integer", "description": "Секунды"},
-                  "label": {"type": "string", "description": "Название (необязательно)"},
-              }, required=["seconds"]),
-              handler=lambda seconds, label="": service.set_timer(seconds, label)),
-        Skill(name="timer_list", description="Показать активные таймеры.",
-              parameters=object_schema({}), handler=service.list_timers),
-        Skill(name="timer_cancel", description="Отменить последний таймер.",
-              parameters=object_schema({}), handler=service.cancel_timer),
-    ]
+    """Навыки таймеров регистрируются в personal.py. Этот модуль предоставляет
+    только TimerSkillService для обратной совместимости."""
+    return []

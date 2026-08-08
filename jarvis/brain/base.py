@@ -70,6 +70,7 @@ class Brain(ABC):
         self._on_tool_result = on_tool_result
         # Множество подтверждённых вызовов: (skill_name, frozenset(args))
         self._confirmed: set[tuple[str, frozenset[tuple[str, Any]]]] = set()
+        self._last_query: str = ""
 
     @abstractmethod
     def _chat(self, messages: list[Message]) -> Message:
@@ -207,6 +208,7 @@ class Brain(ABC):
     def ask(self, user_text: str) -> str:
         """Обрабатывает реплику пользователя и возвращает финальный ответ."""
         with self._lock:
+            self._last_query = user_text
             self.history.append(Message("user", user_text))
             self._trim()
             for _ in range(max(1, self.config.max_tool_iterations)):

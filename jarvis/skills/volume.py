@@ -110,16 +110,23 @@ def toggle_mute() -> str:
 def build_skills() -> list[Skill]:
     return [
         Skill(name="get_system_volume", description="Узнать текущую громкость (0-100).",
-              parameters=object_schema({}), handler=get_volume),
-        Skill(name="system_volume", description="Установить громкость (0-100).",
+              parameters=object_schema({}), handler=get_volume,
+              keywords=("громкость", "звук", "volume", "уровень звука")),
+        Skill(name="system_volume", description="Установить громкость системы (0-100). "
+              "Используй когда говорят: поставь громкость на 30, сделай потише. "
+              "НЕ используй для копирования текста.",
               parameters=object_schema({"level": {"type": "integer", "description": "Громкость 0-100"}}),
-              handler=lambda level=50: set_volume(level)),
-        Skill(name="system_volume_up", description="Увеличить громкость.",
+              handler=lambda level=50: set_volume(level),
+              keywords=("громкость", "звук", "сделай", "поставь", "volume")),
+        Skill(name="system_volume_up", description="Увеличить громкость на N шагов.",
               parameters=object_schema({"step": {"type": "integer", "description": "Шаг (по умолчанию 10)"}}),
-              handler=lambda step=10: volume_up(step)),
-        Skill(name="system_volume_down", description="Уменьшить громкость.",
+              handler=lambda step=10: volume_up(step),
+              keywords=("громче", "увеличить", "сделай громче")),
+        Skill(name="system_volume_down", description="Уменьшить громкость на N шагов.",
               parameters=object_schema({"step": {"type": "integer", "description": "Шаг (по умолчанию 10)"}}),
-              handler=lambda step=10: volume_down(step)),
+              handler=lambda step=10: volume_down(step),
+              keywords=("тише", "уменьшить", "сделай тише")),
         Skill(name="system_toggle_mute", description="Переключить звук (mute/unmute).",
-              parameters=object_schema({}), handler=toggle_mute),
+              parameters=object_schema({}), handler=toggle_mute,
+              keywords=("выключить", "включить", "без звука", "mute")),
     ]

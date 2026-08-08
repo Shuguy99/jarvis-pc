@@ -74,7 +74,7 @@ def build_registry(
     registry.extend(system.build_skills(skills_config))
     registry.extend(apps.build_skills(skills_config))
     registry.extend(web.build_skills(skills_config))
-    registry.extend(personal.build_skills(skills_config, timers))
+    registry.extend(personal.build_skills(timers))
     registry.extend(vision.build_skills(config))
     registry.extend(memory_skills)
     registry.extend(browser_skills)

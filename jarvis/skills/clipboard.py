@@ -47,10 +47,14 @@ def clear_clipboard() -> str:
 def build_skills() -> list[Skill]:
     return [
         Skill(name="get_clipboard", description="Показать содержимое буфера обмена.",
-              parameters=object_schema({}), handler=get_clipboard),
-        Skill(name="set_clipboard", description="Скопировать текст в буфер обмена.",
+              parameters=object_schema({}), handler=get_clipboard,
+              keywords=("буфер", "clipboard", "что скопировано")),
+        Skill(name="set_clipboard", description="Скопировать текст в буфер обмена. "
+              "Используй когда просят: скопируй текст, сохрани в буфер.",
               parameters=object_schema({"text": {"type": "string", "description": "Текст"}}, required=["text"]),
-              handler=lambda text: set_clipboard(text)),
+              handler=lambda text: set_clipboard(text),
+              keywords=("буфер", "clipboard", "скопировать", "сохрани")),
         Skill(name="clear_clipboard", description="Очистить буфер обмена.",
-              parameters=object_schema({}), handler=clear_clipboard),
+              parameters=object_schema({}), handler=clear_clipboard,
+              keywords=("очистить", "буфер")),
     ]

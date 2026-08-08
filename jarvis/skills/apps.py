@@ -152,7 +152,9 @@ def build_skills(config: SkillsConfig) -> list[Skill]:
     return [
         Skill(
             name="open_app",
-            description="Запустить программу на компьютере по названию.",
+            description="Запустить программу на компьютере по названию. "
+                    "Примеры: 'открой блокнот', 'запусти Chrome'. "
+                    "НЕ используй для копирования текста — для этого есть set_clipboard.",
             parameters=object_schema(
                 {"name": {"type": "string", "description": "Название приложения"}},
                 required=["name"],

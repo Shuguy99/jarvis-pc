@@ -1,37 +1,23 @@
-"""Личные навыки: время, заметки, таймеры и напоминания, буфер обмена."""
+"""Личные навыки: время, таймеры и напоминания.
+
+Клавиатура/заметки/буфер обмена вынесены в отдельные модули (clipboard.py, notes.py),
+здесь только уникальные навыки.
+"""
 
 from __future__ import annotations
 
 import datetime as dt
 import threading
 from collections.abc import Callable
-from pathlib import Path
 
-from ..config import SkillsConfig
 from .registry import Skill, object_schema
 
 MONTHS_RU = (
-    "января",
-    "февраля",
-    "марта",
-    "апреля",
-    "мая",
-    "июня",
-    "июля",
-    "августа",
-    "сентября",
-    "октября",
-    "ноября",
-    "декабря",
+    "января", "февраля", "марта", "апреля", "мая", "июня",
+    "июля", "августа", "сентября", "октября", "ноября", "декабря",
 )
 WEEKDAYS_RU = (
-    "понедельник",
-    "вторник",
-    "среда",
-    "четверг",
-    "пятница",
-    "суббота",
-    "воскресенье",
+    "понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье",
 )
 
 
@@ -118,52 +104,7 @@ class TimerService:
             self._timers.clear()
 
 
-def add_note(config: SkillsConfig, text: str) -> str:
-    """Дописывает заметку в файл заметок."""
-    if not text.strip():
-        return "Пустую заметку не сохраняю, сэр."
-    path = Path(config.notes_file)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    stamp = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(f"- [{stamp}] {text.strip()}\n")
-    return "Записал, сэр."
-
-
-def read_notes(config: SkillsConfig, limit: int = 5) -> str:
-    """Читает последние заметки."""
-    path = Path(config.notes_file)
-    if not path.is_file():
-        return "Заметок пока нет, сэр."
-    lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines()]
-    lines = [line for line in lines if line]
-    if not lines:
-        return "Заметок пока нет, сэр."
-    tail = lines[-max(1, int(limit)) :]
-    return "Последние заметки: " + "; ".join(item.lstrip("- ") for item in tail)
-
-
-def read_clipboard() -> str:
-    """Читает текст из буфера обмена."""
-    try:
-        import pyperclip  # type: ignore[import-not-found]
-    except ImportError:
-        return "Модуль pyperclip не установлен, сэр."
-    text = pyperclip.paste()
-    return f"В буфере обмена: {text}" if text else "Буфер обмена пуст, сэр."
-
-
-def write_clipboard(text: str) -> str:
-    """Кладёт текст в буфер обмена."""
-    try:
-        import pyperclip  # type: ignore[import-not-found]
-    except ImportError:
-        return "Модуль pyperclip не установлен, сэр."
-    pyperclip.copy(text)
-    return "Скопировал в буфер обмена, сэр."
-
-
-def build_skills(config: SkillsConfig, timers: TimerService) -> list[Skill]:
+def build_skills(timers: TimerService) -> list[Skill]:
     """Создаёт личные навыки ассистента."""
     return [
         Skill(
@@ -171,12 +112,14 @@ def build_skills(config: SkillsConfig, timers: TimerService) -> list[Skill]:
             description="Узнать текущее время.",
             parameters=object_schema({}),
             handler=current_time,
+            keywords=("время", "часы", "сколько времени", "time"),
         ),
         Skill(
             name="current_date",
             description="Узнать текущую дату и день недели.",
             parameters=object_schema({}),
             handler=current_date,
+            keywords=("дата", "день", "число", "какое число", "date"),
         ),
         Skill(
             name="set_timer",
@@ -195,12 +138,14 @@ def build_skills(config: SkillsConfig, timers: TimerService) -> list[Skill]:
                 required=["seconds"],
             ),
             handler=lambda seconds, label="": timers.add(seconds, label),
+            keywords=("таймер", "напоминание", "будильник", "timer", "remind"),
         ),
         Skill(
             name="list_timers",
             description="Показать активные таймеры.",
             parameters=object_schema({}),
             handler=timers.list,
+            keywords=("таймеры", "напоминания"),
         ),
         Skill(
             name="cancel_timer",
@@ -214,37 +159,6 @@ def build_skills(config: SkillsConfig, timers: TimerService) -> list[Skill]:
                 }
             ),
             handler=lambda timer_id="": timers.cancel(timer_id),
-        ),
-        Skill(
-            name="add_note",
-            description="Сохранить заметку в личный файл заметок.",
-            parameters=object_schema(
-                {"text": {"type": "string", "description": "Текст заметки"}},
-                required=["text"],
-            ),
-            handler=lambda text: add_note(config, text),
-        ),
-        Skill(
-            name="read_notes",
-            description="Прочитать последние сохранённые заметки.",
-            parameters=object_schema(
-                {"limit": {"type": "integer", "description": "Сколько заметок"}}
-            ),
-            handler=lambda limit=5: read_notes(config, limit),
-        ),
-        Skill(
-            name="read_clipboard",
-            description="Прочитать текст из буфера обмена.",
-            parameters=object_schema({}),
-            handler=read_clipboard,
-        ),
-        Skill(
-            name="write_clipboard",
-            description="Поместить текст в буфер обмена.",
-            parameters=object_schema(
-                {"text": {"type": "string", "description": "Текст для копирования"}},
-                required=["text"],
-            ),
-            handler=write_clipboard,
+            keywords=("отменить", "таймер"),
         ),
     ]
