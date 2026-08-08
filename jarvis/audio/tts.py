@@ -42,7 +42,10 @@ class Speaker:
             for voice in engine.getProperty("voices"):
                 if self.config.voice.lower() in f"{voice.id} {voice.name}".lower():
                     engine.setProperty("voice", voice.id)
+                    log.info("SAPI5 голос: %s", voice.name)
                     break
+            else:
+                log.warning("SAPI5: голос «%s» не найден, используется по умолчанию", self.config.voice)
         self._engine = engine
         return engine
 
@@ -54,10 +57,10 @@ class Speaker:
         try:
             engine.say(text)  # type: ignore[attr-defined]
             engine.runAndWait()  # type: ignore[attr-defined]
+            return True
         except Exception:
             log.exception("Системный TTS не смог произнести текст")
             return False
-        return True
 
     def _speak_edge(self, text: str) -> bool:
         """Произносит текст neural-голосом Edge TTS."""
