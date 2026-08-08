@@ -1,10 +1,21 @@
-"""Плагинная система: автозагрузка пользовательских навыков из папки.
+"""Плагинная система: локальные + GitHub-плагины с манифестом.
 
-Пользователь создаёт .py файлы в ``~/.jarvis/skills/``. Каждый файл
-должен определять функцию ``build_skills(config: Config) -> list[Skill]``
-(или ``build_skills() -> list[Skill]`` без параметров).
+Источники плагинов:
+1. **Локальные**: ``~/.jarvis/skills/*.py`` — каждый файл
+   определяет ``build_skills(config?) -> list[Skill]``.
+2. **GitHub**: устанавливаются через ``install_plugin(url)`` в
+   ``~/.jarvis/plugins/<repo-name>/``, автозагружаются при старте.
 
-Пример ``~/.jarvis/skills/hello.py``::
+Манифест ``~/.jarvis/plugins/manifest.json`` отслеживает установленные
+GitHub-плагины (url, имя, дата установки, список навыков).
+
+Голосовые команды (навыки):
+  "Джарвис, установи плагин https://github.com/user/skill"
+  "Джарвис, покажи плагины"
+  "Джарвис, удали плагин jarvis-hello"
+  "Джарвис, обнови плагины"
+
+Пример локального плагина ``~/.jarvis/skills/hello.py``::
 
     from jarvis.skills.registry import Skill, object_schema
 
@@ -18,34 +29,103 @@
             )
         ]
 
-Также поддерживается установка плагинов из GitHub через
-``install_plugin(url)`` — репозиторий клонируется в ``~/.jarvis/plugins/``,
-все .py файлы загружаются автоматически.
+Пример GitHub-плагина (в репозитории файл ``skill.py``)::
+
+    from jarvis.skills.registry import Skill, object_schema
+
+    def build_skills():
+        return [
+            Skill(
+                name="my_skill",
+                description="Описание навыка.",
+                parameters=object_schema({}),
+                handler=lambda: "Результат работы навыка.",
+            )
+        ]
 """
 
 from __future__ import annotations
 
 import importlib.util
+import json
 import logging
 import re
+import shutil
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from ..config import Config
-from .registry import Skill
+from .registry import Skill, object_schema
 
 log = logging.getLogger(__name__)
 
 PLUGINS_DIR_NAME = "skills"
 GITHUB_PLUGINS_DIR = Path.home() / ".jarvis" / "plugins"
+MANIFEST_PATH = GITHUB_PLUGINS_DIR / "manifest.json"
 
 # Паттерн для извлечения имени репозитория из GitHub URL
-# Поддерживает: https://github.com/user/repo.git  и  https://github.com/user/repo
 _GITHUB_REPO_RE = re.compile(
     r"github\.com[:/]([^/]+)/([^/\s]+?)(?:\.git)?\s*$"
 )
+
+
+# ── Манифест ─────────────────────────────────────────────────────────
+
+
+def _load_manifest() -> dict[str, dict[str, Any]]:
+    """Загружает манифест установленных плагинов."""
+    if not MANIFEST_PATH.is_file():
+        return {}
+    try:
+        data = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (json.JSONDecodeError, OSError):
+        log.warning("Манифест плагинов повреждён")
+        return {}
+
+
+def _save_manifest(manifest: dict[str, dict[str, Any]]) -> None:
+    """Сохраняет манифест."""
+    try:
+        GITHUB_PLUGINS_DIR.mkdir(parents=True, exist_ok=True)
+        MANIFEST_PATH.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8"
+        )
+    except OSError:
+        log.exception("Не удалось сохранить манифест")
+
+
+def _manifest_add(url: str, repo_name: str, skills: list[Skill]) -> None:
+    """Добавляет запись в манифест после установки."""
+    manifest = _load_manifest()
+    manifest[repo_name] = {
+        "url": url,
+        "installed_at": datetime.now(timezone.utc).isoformat(),
+        "skills": [s.name for s in skills],
+    }
+    _save_manifest(manifest)
+
+
+def _manifest_remove(repo_name: str) -> None:
+    """Удаляет запись из манифеста."""
+    manifest = _load_manifest()
+    manifest.pop(repo_name, None)
+    _save_manifest(manifest)
+
+
+def _manifest_update_skills(repo_name: str, skills: list[Skill]) -> None:
+    """Обновляет список навыков в манифесте."""
+    manifest = _load_manifest()
+    if repo_name in manifest:
+        manifest[repo_name]["skills"] = [s.name for s in skills]
+        manifest[repo_name]["updated_at"] = datetime.now(timezone.utc).isoformat()
+    _save_manifest(manifest)
+
+
+# ── Загрузка .py файлов ──────────────────────────────────────────────
 
 
 def _load_plugin_file(path: Path, config: Config) -> list[Skill]:
@@ -193,8 +273,7 @@ def install_plugin(url: str, config: Config) -> list[Skill]:
 
     Args:
         url: GitHub URL репозитория (HTTPS или SSH).
-            Например: ``https://github.com/user/jarvis-my-skill``
-        config: Конфигурация Джарвиса, передаётся в ``build_skills`` плагина.
+        config: Конфигурация Джарвиса.
 
     Returns:
         Список загруженных :class:`Skill` объектов.
@@ -202,16 +281,6 @@ def install_plugin(url: str, config: Config) -> list[Skill]:
     Raises:
         ValueError: Если URL не является GitHub-ссылкой.
         RuntimeError: Если клонирование или загрузка не удалась.
-
-    Пример использования::
-
-        from jarvis.skills.plugins import install_plugin
-        from jarvis.config import Config
-
-        config = Config()
-        skills = install_plugin("https://github.com/user/jarvis-cool-skill", config)
-        for skill in skills:
-            registry.register(skill)
     """
     repo_name = _parse_repo_name(url)
     if repo_name is None:
@@ -220,28 +289,246 @@ def install_plugin(url: str, config: Config) -> list[Skill]:
             "Ожидается ссылка вида https://github.com/user/repo"
         )
 
-    # Убеждаемся, что директория плагинов существует
     GITHUB_PLUGINS_DIR.mkdir(parents=True, exist_ok=True)
-
     target_dir = GITHUB_PLUGINS_DIR / repo_name
     log.info("Установка плагина из %s → %s", url, target_dir)
 
     if not _clone_repo(url, target_dir):
         raise RuntimeError(
-            f"Не удалось клонировать репозиторий {url} в {target_dir}, сэр."
+            f"Не удалось клонировать репозиторий {url}, сэр."
         )
 
     skills = _load_plugin_dir(target_dir, config)
     if not skills:
         raise RuntimeError(
-            f"Плагин {repo_name} установлен, но не содержит навыков "
-            "(нет функций build_skills в .py файлах), сэр."
+            f"Плагин {repo_name} установлен, но не содержит навыков, сэр."
         )
 
+    # Записываем в манифест
+    _manifest_add(url, repo_name, skills)
+
     log.info(
-        "Плагин %s: установлено и загружено %d навыков (%s)",
-        repo_name,
-        len(skills),
-        ", ".join(s.name for s in skills),
+        "Плагин %s: %d навыков (%s)",
+        repo_name, len(skills), ", ".join(s.name for s in skills),
     )
     return skills
+
+
+def uninstall_plugin(repo_name: str) -> str:
+    """Удаляет установленный GitHub-плагин.
+
+    Args:
+        repo_name: Имя директории плагина (совпадает с именем репозитория).
+
+    Returns:
+        Сообщение о результате.
+    """
+    repo_name = repo_name.strip()
+    target_dir = GITHUB_PLUGINS_DIR / repo_name
+
+    if not target_dir.is_dir():
+        manifest = _load_manifest()
+        # Попробуем найти по частичному совпадению
+        for name in manifest:
+            if repo_name.lower() in name.lower():
+                target_dir = GITHUB_PLUGINS_DIR / name
+                repo_name = name
+                break
+        if not target_dir.is_dir():
+            available = ", ".join(_load_manifest().keys()) or "нет"
+            return f"Плагин '{repo_name}' не найден. Установленные: {available}."
+
+    try:
+        shutil.rmtree(target_dir)
+    except OSError as exc:
+        return f"Не удалось удалить {repo_name}: {exc}."
+
+    _manifest_remove(repo_name)
+    return f"Плагин {repo_name} удалён."
+
+
+def update_plugin(repo_name: str, config: Config) -> str:
+    """Обновляет один GitHub-плагин (git pull).
+
+    Args:
+        repo_name: Имя плагина (пустая строка = обновить все).
+
+    Returns:
+        Сообщение о результате.
+    """
+    repo_name = repo_name.strip()
+    manifest = _load_manifest()
+
+    if not manifest:
+        return "Нет установленных GitHub-плагинов."
+
+    targets: dict[str, Path] = {}
+    if repo_name:
+        # Ищем конкретный плагин
+        for name in manifest:
+            if repo_name.lower() in name.lower():
+                targets[name] = GITHUB_PLUGINS_DIR / name
+        if not targets:
+            available = ", ".join(manifest.keys())
+            return f"Плагин '{repo_name}' не найден. Установленные: {available}."
+    else:
+        # Все плагины
+        for name in manifest:
+            targets[name] = GITHUB_PLUGINS_DIR / name
+
+    results: list[str] = []
+    for name, target_dir in targets.items():
+        if not target_dir.is_dir():
+            results.append(f"  {name}: директория отсутствует (пропущен)")
+            continue
+        url = manifest[name].get("url", "")
+        ok = _clone_repo(url, target_dir) if url else False
+        if ok:
+            skills = _load_plugin_dir(target_dir, config)
+            _manifest_update_skills(name, skills)
+            results.append(f"  {name}: обновлён, {len(skills)} навыков")
+        else:
+            results.append(f"  {name}: ошибка обновления")
+
+    return "Результат обновления:\n" + "\n".join(results)
+
+
+def list_installed_plugins() -> str:
+    """Возвращает список установленных GitHub-плагинов из манифеста."""
+    manifest = _load_manifest()
+    if not manifest:
+        return "Нет установленных GitHub-плагинов, сэр."
+    lines: list[str] = []
+    for name, info in sorted(manifest.items()):
+        url = info.get("url", "?")
+        skills = info.get("skills", [])
+        installed = info.get("installed_at", "?")[:10]
+        skills_str = ", ".join(skills) if skills else "(нет навыков)"
+        lines.append(f"  {name}: {skills_str}")
+        lines.append(f"    URL: {url}, установлено: {installed}")
+    return f"Установленные плагины ({len(manifest)}):\n" + "\n".join(lines)
+
+
+def load_github_plugins(config: Config) -> list[Skill]:
+    """Загружает все установленные GitHub-плагины при старте.
+
+    Вызывается из build_registry. Для каждого плагина в манифесте
+    загружает навыки из соответствующей директории.
+    """
+    manifest = _load_manifest()
+    if not manifest:
+        return []
+    all_skills: list[Skill] = []
+    for name in sorted(manifest):
+        target_dir = GITHUB_PLUGINS_DIR / name
+        if not target_dir.is_dir():
+            log.warning("Плагин %s: директория отсутствует, пропускаю", name)
+            continue
+        skills = _load_plugin_dir(target_dir, config)
+        if skills:
+            log.info(
+                "GitHub-плагин %s: загружено %d навыков (%s)",
+                name, len(skills), ", ".join(s.name for s in skills),
+            )
+            all_skills.extend(skills)
+    return all_skills
+
+
+def load_plugins(config: Config) -> list[Skill]:
+    """Загружает все плагины: локальные + GitHub."""
+    # 1. Локальные из ~/.jarvis/skills/
+    local_skills = _load_local_plugins(config)
+    # 2. GitHub-плагины из манифеста
+    github_skills = load_github_plugins(config)
+    return local_skills + github_skills
+
+
+def _load_local_plugins(config: Config) -> list[Skill]:
+    """Загружает локальные плагины из ~/.jarvis/skills/."""
+    plugins_dir = Path.home() / ".jarvis" / PLUGINS_DIR_NAME
+    if not plugins_dir.is_dir():
+        return []
+    all_skills: list[Skill] = []
+    for path in sorted(plugins_dir.glob("*.py")):
+        if path.name.startswith("_"):
+            continue
+        skills = _load_plugin_file(path, config)
+        if skills:
+            log.info(
+                "Локальный плагин %s: %d навыков (%s)",
+                path.name, len(skills), ", ".join(s.name for s in skills),
+            )
+            all_skills.extend(skills)
+    return all_skills
+
+
+# ── Голосовые навыки управления плагинами ─────────────────────────────
+
+
+def build_plugin_skills(config: Config) -> list[Skill]:
+    """Навыки для управления плагинами через голос."""
+
+    def _install(url: str = "") -> str:
+        """Установить плагин из GitHub по URL."""
+        if not url:
+            return ("Укажите URL плагина. Например: "
+                    "установи плагин https://github.com/user/jarvis-skill")
+        try:
+            skills = install_plugin(url, config)
+            names = ", ".join(s.name for s in skills)
+            return f"Плагин установлен! Навыки: {names}."
+        except ValueError as e:
+            return str(e)
+        except RuntimeError as e:
+            return str(e)
+        except Exception as e:
+            return f"Ошибка установки: {e}."
+
+    def _uninstall(name: str = "") -> str:
+        """Удалить установленный плагин."""
+        if not name:
+            return "Укажите имя плагина для удаления."
+        return uninstall_plugin(name)
+
+    def _list() -> str:
+        """Показать установленные плагины."""
+        return list_installed_plugins()
+
+    def _update(name: str = "") -> str:
+        """Обновить плагин (или все, если имя не указано)."""
+        return update_plugin(name, config)
+
+    return [
+        Skill(
+            name="plugin_install",
+            description="Установить плагин из GitHub по URL репозитория.",
+            parameters=object_schema(
+                {"url": {"type": "string", "description": "GitHub URL (https://github.com/user/repo)"}},
+                required=["url"],
+            ),
+            handler=_install,
+        ),
+        Skill(
+            name="plugin_uninstall",
+            description="Удалить установленный GitHub-плагин.",
+            parameters=object_schema(
+                {"name": {"type": "string", "description": "Имя плагина"}},
+                required=["name"],
+            ),
+            handler=_uninstall,
+        ),
+        Skill(
+            name="plugin_list",
+            description="Показать все установленные GitHub-плагины.",
+            parameters=object_schema({}),
+            handler=_list,
+        ),
+        Skill(
+            name="plugin_update",
+            description="Обновить плагин(ы) из GitHub. Пустое имя = обновить все.",
+            parameters=object_schema(
+                {"name": {"type": "string", "description": "Имя плагина (необязательно)"}},
+            ),
+            handler=_update,
+        ),
+    ]

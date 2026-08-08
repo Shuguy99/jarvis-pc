@@ -170,10 +170,12 @@ def build_registry(
     # Голосовые профили
     if skills_config.profiles.enabled and profile_manager is not None:
         registry.extend(profiles_skill._build_skills(profile_manager))
-    # Пользовательские плагины
-    from .plugins import load_plugins
+    # Пользовательские плагины (локальные + GitHub)
+    from .plugins import load_plugins, build_plugin_skills
 
     plugin_skills = load_plugins(config)
     if plugin_skills:
         registry.extend(plugin_skills)
+    # Навыки управления плагинами
+    registry.extend(build_plugin_skills(config))
     return registry, Services(timers, memory_store, browser_session, pomodoro_svc, alarm_svc, timer_skill_svc)
