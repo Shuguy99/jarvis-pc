@@ -261,6 +261,9 @@ class TelegramConfig:
     enabled: bool = False
     bot_token: str = ""              # от @BotFather
     chat_id: str = ""                # ID чата или группы
+    allowed_users: list[str] = field(default_factory=list)  # разрешённые username (пусто = все)
+    notify_on_start: bool = True     # уведомление при запуске Джарвиса
+    parse_mode: str = "HTML"         # HTML | Markdown | MarkdownV2 | пусто
 
 
 @dataclass
